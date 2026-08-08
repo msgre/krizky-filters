@@ -1,0 +1,56 @@
+.filter-widget {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.filter-dimension {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.filter-label {
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+}
+
+.filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25em 0.75em;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  text-decoration: none;
+  font-size: 0.875em;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s, background-color 0.15s;
+}
+
+.pill:hover {
+  opacity: 1;
+}
+
+.pill--active {
+  opacity: 1;
+  font-weight: 600;
+}
+
+[data-filter-grid] {
+  transition: opacity 0.15s;
+}
+
+[data-filter-grid].is-loading {
+  opacity: 0.4;
+  pointer-events: none;
+}

@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "krizky-filters"
+version = "0.1.0"
+description = "In-browser multi-dimensional filtering for krizky static sites"
+requires-python = ">=3.12"
+dependencies = ["krizky"]
+
+[project.entry-points."krizky"]
+krizky_filters = "krizky_filters.plugin:plugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["krizky_filters"]

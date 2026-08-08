@@ -1,0 +1,7 @@
+{% if page_name in page_filters and page_filters[page_name]._card_template and filtered %}
+<template id="card-template">
+  {%- with record = filtered[0] %}
+    {%- include page_filters[page_name]["_card_template"] %}
+  {%- endwith %}
+</template>
+{% endif %}

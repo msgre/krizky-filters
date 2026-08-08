@@ -1,0 +1,7 @@
+<div class="filter-pills">
+  {% for _v in _dim.values %}
+  <a href="{{ _v.fallback_url or '#' }}" class="pill"
+     data-filter-value="{{ _v.slug }}"
+     data-filter-dimension="{{ _dim_key }}">{{ _v.value }}</a>
+  {% endfor %}
+</div>

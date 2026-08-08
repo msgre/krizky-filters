@@ -1,0 +1,11 @@
+{% if page_name in page_filters %}
+{% set _dims = page_filters[page_name] %}
+<div class="filter-widget" data-filter-widget>
+  {% for _dim_key, _dim in _dims.items() if not _dim_key.startswith('_') %}
+  <div class="filter-dimension" data-dimension="{{ _dim_key }}" data-type="{{ _dim.type }}">
+    <span class="filter-label">{{ _dim.label }}</span>
+    {% include "_filter_widget_" ~ _dim.type ~ ".html" %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
