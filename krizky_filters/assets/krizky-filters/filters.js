@@ -192,16 +192,16 @@
         } else if (el.tagName === "A") {
           const pattern = el.dataset.hrefPattern;
           el.href = pattern ? pattern.replace("{value}", String(val)) : String(val);
-        } else if (Array.isArray(val)) {
+        } else if ("fieldItemClass" in el.dataset) {
+          // Array field: data-field-item-class declares this element expects a list.
+          // Treat non-array values (null, string) as empty to avoid showing stale
+          // template content from the first record.
+          const arr = Array.isArray(val) ? val : [];
           const itemClass = el.dataset.fieldItemClass || "";
-          if (val.length === 0) {
-            el.hidden = true;
-          } else {
-            el.hidden = false;
-            el.innerHTML = val
-              .map((v) => `<span class="${itemClass}">${escapeHtml(String(v))}</span>`)
-              .join("");
-          }
+          el.innerHTML = arr
+            .map((v) => `<span class="${itemClass}">${escapeHtml(String(v))}</span>`)
+            .join("");
+          el.hidden = arr.length === 0;
         } else if (el.dataset.truncate) {
           const length = parseInt(el.dataset.truncate, 10);
           const killwords = "truncateKillwords" in el.dataset;
