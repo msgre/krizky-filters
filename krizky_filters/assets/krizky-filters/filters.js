@@ -304,6 +304,13 @@
     return result;
   }
 
+  function goToPage(n) {
+    currentPage = n;
+    updateUrl();
+    filterAndRender();
+    window.scrollTo(0, 0);
+  }
+
   function renderPagination(page, totalPages) {
     if (!paginationEl) {
       paginationEl = document.querySelector("[data-filter-pagination]");
@@ -341,14 +348,12 @@
 
     const prev = paginationEl.querySelector("[data-filter-prev]");
     const next = paginationEl.querySelector("[data-filter-next]");
-    if (prev) prev.addEventListener("click", (e) => { e.preventDefault(); currentPage--; updateUrl(); filterAndRender(); });
-    if (next) next.addEventListener("click", (e) => { e.preventDefault(); currentPage++; updateUrl(); filterAndRender(); });
+    if (prev) prev.addEventListener("click", (e) => { e.preventDefault(); goToPage(currentPage - 1); });
+    if (next) next.addEventListener("click", (e) => { e.preventDefault(); goToPage(currentPage + 1); });
     paginationEl.querySelectorAll("[data-filter-page]").forEach((a) => {
       a.addEventListener("click", (e) => {
         e.preventDefault();
-        currentPage = parseInt(a.dataset.filterPage, 10);
-        updateUrl();
-        filterAndRender();
+        goToPage(parseInt(a.dataset.filterPage, 10));
       });
     });
   }
