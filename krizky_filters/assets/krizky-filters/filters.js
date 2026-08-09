@@ -186,14 +186,30 @@
       clone.querySelectorAll("[data-field]").forEach((el) => {
         const field = el.dataset.field;
         const val = record[field] ?? "";
+
         if (el.tagName === "IMG") {
-          el.src = val;
-        } else if (el.tagName === "A" && field === "href") {
-          el.href = val;
+          el.src = String(val);
         } else if (el.tagName === "A") {
-          el.href = val;
+          const pattern = el.dataset.hrefPattern;
+          el.href = pattern ? pattern.replace("{value}", String(val)) : String(val);
+        } else if (Array.isArray(val)) {
+          const itemClass = el.dataset.fieldItemClass || "";
+          if (val.length === 0) {
+            el.hidden = true;
+          } else {
+            el.hidden = false;
+            el.innerHTML = val
+              .map((v) => `<span class="${itemClass}">${escapeHtml(String(v))}</span>`)
+              .join("");
+          }
+        } else if (el.dataset.truncate) {
+          const max = parseInt(el.dataset.truncate, 10);
+          const str = String(val);
+          el.textContent = str.length > max ? str.slice(0, max).trimEnd() + "…" : str;
+        } else if (el.dataset.dateFormat && val) {
+          el.textContent = formatDate(String(val), el.dataset.dateFormat);
         } else {
-          el.textContent = val;
+          el.textContent = String(val);
         }
       });
       fragment.appendChild(clone);
@@ -202,6 +218,28 @@
     grid.innerHTML = "";
     grid.appendChild(fragment);
     grid.classList.remove("is-loading");
+  }
+
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function formatDate(dateStr, fmt) {
+    const d = new Date(dateStr.replace(" ", "T"));
+    if (isNaN(d.getTime())) return dateStr;
+    const day = d.getDate();
+    const month = d.getMonth() + 1;
+    const year = d.getFullYear();
+    return fmt
+      .replace(/%-d/g, String(day))
+      .replace(/%d/g, String(day).padStart(2, "0"))
+      .replace(/%-m/g, String(month))
+      .replace(/%m/g, String(month).padStart(2, "0"))
+      .replace(/%Y/g, String(year))
+      .replace(/%y/g, String(year).slice(-2));
   }
 
   // ── Pagination ────────────────────────────────────────────────────────────
