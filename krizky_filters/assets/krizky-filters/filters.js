@@ -4,9 +4,9 @@
  * Reads filter config from <script type="application/json" id="filter-config">,
  * fetches a compact JSON file, and filters records client-side.
  *
- * Filtering logic: AND between dimensions AND within dimensions.
- * - For many:true dimensions (JSON arrays): record must contain ALL active values.
- * - For other dimensions: record must equal the single active value.
+ * Filtering logic: AND between dimensions, OR within a dimension.
+ * - For many:true dimensions (JSON arrays): record must contain AT LEAST ONE active value.
+ * - For other dimensions: record value must be one of the active slugs.
  *   (select type enforces max 1 active value via UI)
  *
  * URL state: ?dim1=val1,val2&dim2=val3  (slugs, comma-separated per dimension)
@@ -132,14 +132,11 @@
       const val = record[dim];
 
       if (dimCfg.many) {
-        // AND: record must contain ALL active values
+        // OR within dimension: record must contain AT LEAST ONE active value
         const arr = Array.isArray(val) ? val : [];
-        const allMatch = [...active].every((slug) =>
-          arr.some((v) => String(v) === slug)
-        );
-        if (!allMatch) return false;
+        if (!arr.some((v) => active.has(String(v)))) return false;
       } else {
-        // plain string: must equal the single active value
+        // OR within dimension: record value must be one of the active slugs
         if (!active.has(String(val ?? ""))) return false;
       }
     }
