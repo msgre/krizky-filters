@@ -26,7 +26,7 @@
     return;
   }
 
-  const { jsonUrl, pageSize, gridSelector, dimensions } = config;
+  const { jsonUrl, basePath, pageSize, gridSelector, dimensions } = config;
   const paginationWindow = config.window ?? 2;
   const paginationBoundary = config.boundary ?? 1;
   const grid = document.querySelector(gridSelector);
@@ -62,26 +62,53 @@
 
   // ── URL state ─────────────────────────────────────────────────────────────
 
+  // Equivalent of Python render.page_path(): /base.html → /base-N.html for N>1.
+  function pagePath(base, pageNum) {
+    if (pageNum === 1) return base;
+    const dot = base.lastIndexOf(".");
+    return dot < 0
+      ? base + "-" + pageNum
+      : base.slice(0, dot) + "-" + pageNum + base.slice(dot);
+  }
+
+  // Parse current page number from URL path using the same scheme as server.
+  function pageFromPath(base) {
+    const path = location.pathname;
+    if (path === base) return 1;
+    const dot = base.lastIndexOf(".");
+    if (dot < 0) return 1;
+    const stem = base.slice(0, dot);
+    const ext = base.slice(dot);
+    const match = path.slice(stem.length).match(/^-(\d+)(.*)$/);
+    return (match && match[2] === ext) ? parseInt(match[1], 10) : 1;
+  }
+
   function parseUrlState() {
     state.clear();
     const params = new URLSearchParams(location.search);
     for (const [dim] of Object.entries(dimensions)) {
       const raw = params.get(dim);
-      if (raw) {
-        state.set(dim, new Set(raw.split(",").filter(Boolean)));
-      }
+      if (raw) state.set(dim, new Set(raw.split(",").filter(Boolean)));
     }
-    currentPage = 1;
+    currentPage = pageFromPath(basePath);
   }
 
   function serializeState() {
     const params = new URLSearchParams();
     for (const [dim, values] of state) {
-      if (values.size > 0) {
-        params.set(dim, [...values].join(","));
-      }
+      if (values.size > 0) params.set(dim, [...values].join(","));
     }
     return params.toString();
+  }
+
+  // Build full href for page N: path encodes page number, query encodes filters.
+  function pageHref(pageNum) {
+    const qs = serializeState();
+    return pagePath(basePath, pageNum) + (qs ? "?" + qs : "");
+  }
+
+  function updateUrl() {
+    history.pushState({}, "", pageHref(currentPage));
   }
 
   // ── Pill listeners ────────────────────────────────────────────────────────
@@ -121,8 +148,7 @@
         }
 
         currentPage = 1;
-        const qs = serializeState();
-        history.pushState({}, "", qs ? "?" + qs : location.pathname);
+        updateUrl();
         filterAndRender();
       });
     });
@@ -294,19 +320,19 @@
     const hasNext = page < totalPages;
 
     const prevBtn = hasPrev
-      ? `<a href="#" class="page-btn page-prev" data-filter-prev><span class="arrow">‹</span> <span class="btn-text">předchozí</span></a>`
+      ? `<a href="${pageHref(page - 1)}" class="page-btn page-prev" data-filter-prev><span class="arrow">‹</span> <span class="btn-text">předchozí</span></a>`
       : `<span class="page-btn page-prev is-disabled"><span class="arrow">‹</span> <span class="btn-text">předchozí</span></span>`;
 
     const nextBtn = hasNext
-      ? `<a href="#" class="page-btn page-next" data-filter-next><span class="btn-text">další</span> <span class="arrow">›</span></a>`
+      ? `<a href="${pageHref(page + 1)}" class="page-btn page-next" data-filter-next><span class="btn-text">další</span> <span class="arrow">›</span></a>`
       : `<span class="page-btn page-next is-disabled"><span class="btn-text">další</span> <span class="arrow">›</span></span>`;
 
     const pages = paginationPages(page, totalPages, paginationWindow, paginationBoundary);
     const items = pages
       .map((p) => {
         if (p === null) return `<li class="page-dots" aria-hidden="true">&hellip;</li>`;
-        if (p === page) return `<li><a class="page-num is-current" aria-current="page">${p}</a></li>`;
-        return `<li><a href="#" class="page-num" data-filter-page="${p}">${p}</a></li>`;
+        if (p === page) return `<li><a href="${pageHref(p)}" class="page-num is-current" aria-current="page">${p}</a></li>`;
+        return `<li><a href="${pageHref(p)}" class="page-num" data-filter-page="${p}">${p}</a></li>`;
       })
       .join("");
 
@@ -315,12 +341,13 @@
 
     const prev = paginationEl.querySelector("[data-filter-prev]");
     const next = paginationEl.querySelector("[data-filter-next]");
-    if (prev) prev.addEventListener("click", (e) => { e.preventDefault(); currentPage--; filterAndRender(); });
-    if (next) next.addEventListener("click", (e) => { e.preventDefault(); currentPage++; filterAndRender(); });
+    if (prev) prev.addEventListener("click", (e) => { e.preventDefault(); currentPage--; updateUrl(); filterAndRender(); });
+    if (next) next.addEventListener("click", (e) => { e.preventDefault(); currentPage++; updateUrl(); filterAndRender(); });
     paginationEl.querySelectorAll("[data-filter-page]").forEach((a) => {
       a.addEventListener("click", (e) => {
         e.preventDefault();
         currentPage = parseInt(a.dataset.filterPage, 10);
+        updateUrl();
         filterAndRender();
       });
     });
