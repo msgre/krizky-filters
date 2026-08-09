@@ -203,9 +203,12 @@
               .join("");
           }
         } else if (el.dataset.truncate) {
-          const max = parseInt(el.dataset.truncate, 10);
-          const str = String(val);
-          el.textContent = str.length > max ? str.slice(0, max).trimEnd() + "…" : str;
+          const length = parseInt(el.dataset.truncate, 10);
+          const killwords = "truncateKillwords" in el.dataset;
+          const end = el.dataset.truncateEnd ?? "...";
+          const leeway = el.dataset.truncateLeeway !== undefined
+            ? parseInt(el.dataset.truncateLeeway, 10) : 5;
+          el.textContent = jinjaTruncate(String(val), length, killwords, end, leeway);
         } else if (el.dataset.dateFormat && val) {
           el.textContent = formatDate(String(val), el.dataset.dateFormat);
         } else {
@@ -225,6 +228,15 @@
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
+  }
+
+  // Equivalent of Jinja2's do_truncate (same defaults: killwords=false, end="...", leeway=5).
+  function jinjaTruncate(s, length, killwords, end, leeway) {
+    if (s.length <= length + leeway) return s;
+    if (killwords) return s.slice(0, length - end.length) + end;
+    const cut = s.slice(0, length - end.length);
+    const lastSpace = cut.lastIndexOf(" ");
+    return (lastSpace >= 0 ? cut.slice(0, lastSpace) : cut) + end;
   }
 
   function formatDate(dateStr, fmt) {
