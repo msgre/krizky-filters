@@ -263,6 +263,26 @@
           el.textContent = String(val);
         }
       });
+      // data-field-photo: construct photo URL from row ID + size + format
+      clone.querySelectorAll("[data-field-photo]").forEach((el) => {
+        const rowId = record[el.dataset.fieldPhoto];
+        if (!rowId || !config.photosBaseUrl) {
+          el.hidden = true;
+          return;
+        }
+        const pad = parseInt(el.dataset.photoPad ?? "3", 10);
+        const size = el.dataset.photoSize || "thumb";
+        const fmt = el.dataset.photoFormat || "jpg";
+        const paddedId = String(rowId).padStart(pad, "0");
+        el.src = `${config.photosBaseUrl}/${paddedId}_${size}.${fmt}`;
+        el.hidden = false;
+        el.onload = () => {
+          const thumb = el.closest("[data-thumb]");
+          if (thumb) thumb.classList.remove("placeholder");
+        };
+        el.onerror = () => { el.hidden = true; };
+      });
+
       fragment.appendChild(clone);
     });
 

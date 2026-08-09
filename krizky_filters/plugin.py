@@ -46,9 +46,12 @@ def _build_filter_config(page_cfg: dict, config: dict) -> dict:
             entry["many"] = True
         dimensions[dim_key] = entry
 
+    photos_base_url = config.get("sources", {}).get("photos", {}).get("base_url", "")
+
     return {
         "jsonUrl": json_url,
         "basePath": page_cfg.get("path", "/index.html"),
+        "photosBaseUrl": photos_base_url,
         "pageSize": page_cfg.get("paginate_by") or site_cfg.get("paginate_by") or 0,
         "gridSelector": "[data-filter-grid]",
         "window": site_cfg.get("pagination_window", 2),
