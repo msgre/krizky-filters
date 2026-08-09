@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from krizky_filters.json_gen import generate_filter_json
-from krizky_filters.plugin import FilterPlugin, _build_filter_config
+from krizky_filters.plugin import FilterPlugin, _build_filter_config, _resolve_url_template
 from krizky_filters.values import fetch_filter_values
 
 
@@ -66,11 +66,13 @@ def minimal_config():
                 "vsechna_mista": {
                     "path": "/vsechna-mista.html",
                     "template": "vsechna_mista.html",
-                    "card_template": "_karta.html",
                     "filters": {
                         "fields": ["slug", "nazev", "typ"],
-                        "typ": {"label": "Typ", "type": "select"},
-                        "datace": {"label": "Datace", "type": "select"},
+                        "card_template": "_karta.html",
+                        "dimensions": {
+                            "typ": {"label": "Typ", "type": "select"},
+                            "datace": {"label": "Datace", "type": "select"},
+                        },
                     },
                 }
             },
@@ -82,17 +84,17 @@ def minimal_config():
 
 
 def test_fetch_filter_values_plain(conn):
-    dim_cfg = {"label": "Typ", "type": "select", "fallback_url": "/typy/{slug}.html"}
-    values = fetch_filter_values(conn, "mista", "typ", dim_cfg)
+    dim_cfg = {"label": "Typ", "type": "select"}
+    values = fetch_filter_values(conn, "mista", "typ", dim_cfg, url_template="/typy/{slug}.html")
     slugs = [v["slug"] for v in values]
     assert "kriz" in slugs
     assert "socha" in slugs
-    assert all(v["fallback_url"].startswith("/typy/") for v in values)
+    assert all(v["url"].startswith("/typy/") for v in values)
 
 
-def test_fetch_filter_values_no_fallback(conn):
+def test_fetch_filter_values_no_url(conn):
     values = fetch_filter_values(conn, "mista", "typ", {"label": "Typ", "type": "select"})
-    assert all(v["fallback_url"] == "" for v in values)
+    assert all(v["url"] == "" for v in values)
 
 
 def test_fetch_filter_values_many(conn_tags):
@@ -109,7 +111,8 @@ def test_fetch_filter_values_structure(conn):
     for v in values:
         assert "value" in v
         assert "slug" in v
-        assert "fallback_url" in v
+        assert "url" in v
+        assert "count" in v
 
 
 # ── json_gen.py ───────────────────────────────────────────────────────────────
@@ -117,7 +120,7 @@ def test_fetch_filter_values_structure(conn):
 
 def test_generate_filter_json_fields_subset(tmp_path):
     records = [{"slug": "a", "nazev": "A", "extra": "drop"}]
-    page_cfg = {"filters": {"fields": ["slug", "nazev"], "typ": {"label": "Typ", "type": "select"}}}
+    page_cfg = {"filters": {"fields": ["slug", "nazev"]}}
     generate_filter_json(page_cfg, records, tmp_path, "/vsechna-mista.html")
     data = json.loads((tmp_path / "jsons" / "vsechna-mista-filter.json").read_text())
     assert data == [{"slug": "a", "nazev": "A"}]
@@ -125,7 +128,7 @@ def test_generate_filter_json_fields_subset(tmp_path):
 
 def test_generate_filter_json_all_fields(tmp_path):
     records = [{"slug": "a", "nazev": "A", "extra": "keep"}]
-    page_cfg = {"filters": {"typ": {"label": "Typ", "type": "select"}}}
+    page_cfg = {"filters": {"dimensions": {"typ": {"label": "Typ", "type": "select"}}}}
     generate_filter_json(page_cfg, records, tmp_path, "/mista.html")
     data = json.loads((tmp_path / "jsons" / "mista-filter.json").read_text())
     assert data[0]["extra"] == "keep"
@@ -158,21 +161,29 @@ def test_build_filter_config_dimensions(minimal_config):
     assert "typ" in cfg["dimensions"]
     assert "datace" in cfg["dimensions"]
     assert "fields" not in cfg["dimensions"]
+    assert "card_template" not in cfg["dimensions"]
     assert cfg["dimensions"]["typ"]["type"] == "select"
 
 
-def test_build_filter_config_no_fallback_url_in_dimensions(minimal_config):
+def test_build_filter_config_no_url_in_dimensions(minimal_config):
+    """URL template belongs to server-side widget rendering, not to JS filter config."""
     page_cfg = dict(minimal_config["site"]["pages"]["vsechna_mista"])
     page_cfg["filters"] = {
-        "typ": {"label": "Typ", "type": "select", "fallback_url": "/typy/{slug}.html"}
+        "dimensions": {
+            "typ": {"label": "Typ", "type": "select", "url": "/typy/{slug}.html"},
+        },
     }
     cfg = _build_filter_config(page_cfg, minimal_config)
-    assert "fallback_url" not in cfg["dimensions"]["typ"]
+    assert "url" not in cfg["dimensions"]["typ"]
 
 
 def test_build_filter_config_many_flag(minimal_config):
     page_cfg = dict(minimal_config["site"]["pages"]["vsechna_mista"])
-    page_cfg["filters"] = {"stitky": {"label": "Štítek", "type": "multiselect", "many": True}}
+    page_cfg["filters"] = {
+        "dimensions": {
+            "stitky": {"label": "Štítek", "type": "multiselect", "many": True},
+        },
+    }
     cfg = _build_filter_config(page_cfg, minimal_config)
     assert cfg["dimensions"]["stitky"]["many"] is True
 
@@ -181,6 +192,58 @@ def test_build_filter_config_page_size(minimal_config):
     page_cfg = minimal_config["site"]["pages"]["vsechna_mista"]
     cfg = _build_filter_config(page_cfg, minimal_config)
     assert cfg["pageSize"] == 10
+
+
+# ── plugin.py — _resolve_url_template ────────────────────────────────────────
+
+
+def test_resolve_url_template_explicit():
+    """Explicit url in dim config wins."""
+    config = {"site": {"pages": {}}}
+    url = _resolve_url_template(config, "typ", {"url": "/custom/{slug}.html"})
+    assert url == "/custom/{slug}.html"
+
+
+def test_resolve_url_template_from_category_page():
+    """Auto-detect URL from matching category page."""
+    config = {
+        "site": {
+            "pages": {
+                "kategorie": {
+                    "category": "typ",
+                    "path": "/kategorie/{{ category.slug }}.html",
+                },
+            },
+        },
+    }
+    url = _resolve_url_template(config, "typ", {})
+    assert url == "/kategorie/{slug}.html"
+
+
+def test_resolve_url_template_matches_many_flag():
+    """Auto-detect must match `many` between dim and page."""
+    config = {
+        "site": {
+            "pages": {
+                "stitky_page": {
+                    "category": "stitky",
+                    "many": True,
+                    "path": "/stitek/{{ category.slug }}.html",
+                },
+            },
+        },
+    }
+    # dim with many=True → matches
+    url = _resolve_url_template(config, "stitky", {"many": True})
+    assert url == "/stitek/{slug}.html"
+    # dim with many=False → no match
+    url = _resolve_url_template(config, "stitky", {"many": False})
+    assert url == ""
+
+
+def test_resolve_url_template_no_match():
+    config = {"site": {"pages": {"other": {"path": "/other.html"}}}}
+    assert _resolve_url_template(config, "typ", {}) == ""
 
 
 # ── plugin.py — inject_head / inject_body_end ─────────────────────────────────
@@ -252,7 +315,11 @@ def test_extra_template_vars_skips_non_filter_pages(conn):
                 "filter_page": {
                     "path": "/mista.html",
                     "template": "mista.html",
-                    "filters": {"typ": {"label": "Typ", "type": "select"}},
+                    "filters": {
+                        "dimensions": {
+                            "typ": {"label": "Typ", "type": "select"},
+                        },
+                    },
                 },
             }
         },
@@ -271,6 +338,33 @@ def test_extra_template_vars_no_filter_pages(conn):
     p = FilterPlugin()
     result = p.extra_template_vars(config=config, config_dir=Path("."), conn=conn)
     assert result["page_filters"] == {}
+
+
+def test_extra_template_vars_auto_detects_url(conn):
+    """URL is auto-detected from a matching category page when not explicit."""
+    config = {
+        "sources": {"tables": {"mista": {"main": True}}},
+        "site": {
+            "pages": {
+                "kategorie": {
+                    "category": "typ",
+                    "path": "/kategorie/{{ category.slug }}.html",
+                },
+                "filter_page": {
+                    "path": "/mista.html",
+                    "filters": {
+                        "dimensions": {"typ": {"label": "Typ", "type": "select"}},
+                    },
+                },
+            },
+        },
+    }
+    p = FilterPlugin()
+    result = p.extra_template_vars(config=config, config_dir=Path("."), conn=conn)
+    values = result["page_filters"]["filter_page"]["typ"]["values"]
+    # Every fetched value should have URL derived from the category page's path.
+    for v in values:
+        assert v["url"].startswith("/kategorie/") and v["url"].endswith(".html")
 
 
 # ── plugin.py — after_page_written ───────────────────────────────────────────

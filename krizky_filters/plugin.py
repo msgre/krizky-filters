@@ -7,13 +7,12 @@ from pathlib import Path, PurePosixPath
 from jinja2 import ChoiceLoader, FileSystemLoader
 
 from krizky.hooks import hookimpl
+from krizky.render import render_config_str
 from krizky_filters.json_gen import generate_filter_json
 from krizky_filters.values import fetch_filter_values
 
 _PLUGIN_TEMPLATES = Path(__file__).parent / "templates"
 _PLUGIN_ASSETS = Path(__file__).parent / "assets"
-
-_RESERVED_FILTER_KEYS = {"fields"}
 
 
 def _get_main_table(config: dict) -> str:
@@ -22,10 +21,32 @@ def _get_main_table(config: dict) -> str:
 
 
 def _iter_dimensions(filters_cfg: dict):
-    """Yield (dim_key, dim_cfg) skipping reserved keys."""
-    for key, val in filters_cfg.items():
-        if key not in _RESERVED_FILTER_KEYS:
-            yield key, val
+    """Yield (dim_key, dim_cfg) from filters.dimensions."""
+    for key, val in filters_cfg.get("dimensions", {}).items():
+        yield key, val
+
+
+def _resolve_url_template(config: dict, dim_key: str, dim_cfg: dict) -> str:
+    """Resolve the URL template for a dimension.
+
+    Priority:
+      1. explicit `url` in dimension config
+      2. auto-detect from matching category page (same `category` and `many`)
+      3. empty string (no href)
+    """
+    explicit = dim_cfg.get("url")
+    if explicit:
+        return explicit
+
+    many = bool(dim_cfg.get("many", False))
+    for page_cfg in config.get("site", {}).get("pages", {}).values():
+        if page_cfg.get("category") == dim_key and bool(page_cfg.get("many", False)) == many:
+            path = page_cfg.get("path", "")
+            if path:
+                # Render Jinja2 path template with a literal {slug} placeholder.
+                return render_config_str(path, category={"slug": "{slug}"})
+            break
+    return ""
 
 
 def _build_filter_config(page_cfg: dict, config: dict) -> dict:
@@ -94,14 +115,15 @@ class FilterPlugin:
             filters_cfg = page_cfg["filters"]
             dims: dict = {}
             for dim_key, dim_cfg in _iter_dimensions(filters_cfg):
+                url_template = _resolve_url_template(config, dim_key, dim_cfg)
                 dims[dim_key] = {
                     "label": dim_cfg["label"],
                     "type": dim_cfg.get("type", "multiselect"),
                     "many": dim_cfg.get("many", False),
-                    "values": fetch_filter_values(conn, main_table, dim_key, dim_cfg),
+                    "values": fetch_filter_values(conn, main_table, dim_key, dim_cfg, url_template),
                 }
             # _card_template is consumed by _filter_card_template.html
-            dims["_card_template"] = page_cfg.get("card_template")
+            dims["_card_template"] = filters_cfg.get("card_template")
             page_filters[page_name] = dims
 
         return {"page_filters": page_filters}

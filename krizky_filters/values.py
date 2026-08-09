@@ -34,16 +34,19 @@ def fetch_filter_values(
     main_table: str,
     dim_key: str,
     dim_cfg: dict,
+    url_template: str = "",
 ) -> list[dict]:
     """Return distinct values for one filter dimension.
 
-    Returns a list of dicts with keys: value, slug, fallback_url, count.
+    Returns a list of dicts with keys: value, slug, url, count.
     For many=True dimensions the slug column is expected to be a JSON object
     mapping value → slug (krizky convention: {dim_key}_slug).
+
+    url_template is a string with {slug} placeholder, e.g. "/typ/{slug}.html".
+    Resolution of the template is the caller's responsibility.
     """
     slug_col = f"{dim_key}_slug"
     many = dim_cfg.get("many", False)
-    fallback_tpl = dim_cfg.get("fallback_url", "")
 
     pairs: list[tuple[str, str]] = (
         fetch_distinct_tags(conn, main_table, dim_key, slug_col)
@@ -56,7 +59,7 @@ def fetch_filter_values(
         {
             "value": v,
             "slug": s,
-            "fallback_url": fallback_tpl.replace("{slug}", s) if fallback_tpl else "",
+            "url": url_template.replace("{slug}", s) if url_template else "",
             "count": counts.get(v, 0),
         }
         for v, s in pairs
