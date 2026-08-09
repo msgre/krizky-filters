@@ -132,12 +132,18 @@
       const val = record[dim];
 
       if (dimCfg.many) {
-        // OR within dimension: record must contain AT LEAST ONE active value
-        const arr = Array.isArray(val) ? val : [];
-        if (!arr.some((v) => active.has(String(v)))) return false;
+        // OR within dimension: at least one value's slug must be active.
+        // stitky_slug is a {value: slug} object — use it to resolve slugs.
+        const valArr = Array.isArray(val) ? val : [];
+        const slugObj = record[dim + "_slug"];
+        const slugArr = (slugObj && typeof slugObj === "object" && !Array.isArray(slugObj))
+          ? valArr.map((v) => slugObj[v] ?? String(v))
+          : valArr.map(String);
+        if (!slugArr.some((s) => active.has(s))) return false;
       } else {
-        // OR within dimension: record value must be one of the active slugs
-        if (!active.has(String(val ?? ""))) return false;
+        // OR within dimension: prefer {dim}_slug field over raw value field.
+        const slugVal = String(record[dim + "_slug"] ?? val ?? "");
+        if (!active.has(slugVal)) return false;
       }
     }
     return true;
