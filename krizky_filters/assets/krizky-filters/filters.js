@@ -208,6 +208,15 @@
 
     renderCards(pageRecords);
     renderPagination(currentPage, totalPages);
+
+    // Notify other scripts (e.g. custom widgets) about the updated filter state.
+    document.dispatchEvent(new CustomEvent("krizky-filters:update", {
+      detail: {
+        filtered: filtered.length,
+        total: allRecords.length,
+        activeState: Object.fromEntries([...state].map(([k, v]) => [k, [...v]])),
+      },
+    }));
   }
 
   function renderCards(records) {
@@ -444,14 +453,27 @@
   }
 
   function attachClearListeners() {
-    document.querySelectorAll("[data-filter-clear]").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
+    // Event delegation handles both static and dynamically inserted clear buttons.
+    document.addEventListener("click", (e) => {
+      // [data-filter-clear] — clear all active filters
+      if (e.target.closest("[data-filter-clear]") && !e.target.closest("[data-filter-clear-dim]")) {
         e.preventDefault();
         state.clear();
         currentPage = 1;
         updateUrl();
         filterAndRender();
-      });
+        return;
+      }
+      // [data-filter-clear-dim="dim"] — clear one dimension (e.g. combobox trigger ×)
+      const dimBtn = e.target.closest("[data-filter-clear-dim]");
+      if (dimBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        state.delete(dimBtn.dataset.filterClearDim);
+        currentPage = 1;
+        updateUrl();
+        filterAndRender();
+      }
     });
   }
 })();
