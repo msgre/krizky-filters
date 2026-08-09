@@ -54,3 +54,44 @@
   opacity: 0.4;
   pointer-events: none;
 }
+
+.filter-active {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.filter-active:empty {
+  display: none;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.2em 0.6em;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  font-size: 0.875em;
+}
+
+.filter-chip::after {
+  content: "×";
+  opacity: 0.6;
+}
+
+.filter-clear {
+  background: none;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+  opacity: 0.6;
+  font-size: 0.875em;
+}
+
+.filter-clear:hover {
+  opacity: 1;
+}

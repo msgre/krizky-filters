@@ -7,9 +7,16 @@
  * Filtering logic: AND between dimensions, OR within a dimension.
  * - For many:true dimensions (JSON arrays): record must contain AT LEAST ONE active value.
  * - For other dimensions: record value must be one of the active slugs.
- *   (select type enforces max 1 active value via UI)
  *
- * URL state: ?dim1=val1,val2&dim2=val3  (slugs, comma-separated per dimension)
+ * URL state: path encodes page (/page-2.html), query encodes filters (?dim=val1,val2)
+ *
+ * UI hook points (add to any element in your template to opt in):
+ *   [data-filter-value][data-filter-dimension]  clickable filter control (pill, checkbox, …)
+ *   [data-filter-clear]                         button: clear all active filters
+ *   [data-filter-active-list]                   container: JS inserts removable chips here
+ *   [data-filter-count-filtered]                shows current filtered record count
+ *   [data-filter-count-total]                   shows total record count
+ *   [data-filter-count]                         single element with {filtered}/{total} template
  */
 (function () {
   "use strict";
@@ -49,7 +56,8 @@
         el.hidden = true;
       });
       parseUrlState();
-      attachPillListeners();
+      attachFilterListeners();
+      attachClearListeners();
       window.addEventListener("popstate", () => {
         parseUrlState();
         filterAndRender();
@@ -111,9 +119,9 @@
     history.pushState({}, "", pageHref(currentPage));
   }
 
-  // ── Pill listeners ────────────────────────────────────────────────────────
+  // ── Filter control listeners ──────────────────────────────────────────────
 
-  function attachPillListeners() {
+  function attachFilterListeners() {
     document.querySelectorAll("[data-filter-value][data-filter-dimension]").forEach((pill) => {
       pill.addEventListener("click", (e) => {
         e.preventDefault();
@@ -185,7 +193,10 @@
 
   function filterAndRender() {
     const filtered = allRecords.filter(matchesFilter);
-    updatePillStates();
+    updateFilterStates();
+    updateFilterCount(filtered.length, allRecords.length);
+    updateActiveList();
+    updateClearButton();
 
     const total = filtered.length;
     const size = pageSize > 0 ? pageSize : total;
@@ -358,16 +369,89 @@
     });
   }
 
-  // ── Pill active states ────────────────────────────────────────────────────
+  // ── Filter state display ──────────────────────────────────────────────────
 
-  function updatePillStates() {
-    document.querySelectorAll("[data-filter-value][data-filter-dimension]").forEach((pill) => {
-      const dim = pill.dataset.filterDimension;
-      const slug = pill.dataset.filterValue;
+  // Toggle active class on every [data-filter-value] control (pill, checkbox, …).
+  function updateFilterStates() {
+    document.querySelectorAll("[data-filter-value][data-filter-dimension]").forEach((el) => {
+      const dim = el.dataset.filterDimension;
+      const slug = el.dataset.filterValue;
       const active = state.get(dim);
       const isActive = active ? active.has(slug) : false;
-      pill.classList.toggle("pill--active", isActive);
-      pill.setAttribute("aria-pressed", String(isActive));
+      el.classList.toggle("pill--active", isActive);
+      el.setAttribute("aria-pressed", String(isActive));
+    });
+  }
+
+  // Update count elements.
+  function updateFilterCount(filteredCount, totalCount) {
+    document.querySelectorAll("[data-filter-count-filtered]").forEach((el) => {
+      el.textContent = filteredCount;
+    });
+    document.querySelectorAll("[data-filter-count-total]").forEach((el) => {
+      el.textContent = totalCount;
+    });
+    // Single-element variant: <span data-filter-count>{filtered} z {total}</span>
+    // Original text is used as template on first call, then stored in data-filter-count-orig.
+    document.querySelectorAll("[data-filter-count]").forEach((el) => {
+      if (!el.dataset.filterCountOrig) el.dataset.filterCountOrig = el.textContent;
+      el.textContent = el.dataset.filterCountOrig
+        .replace("{filtered}", filteredCount)
+        .replace("{total}", totalCount);
+    });
+  }
+
+  // Render removable chips for each active filter value into [data-filter-active-list].
+  // Label is read from the matching [data-filter-value] control in the DOM;
+  // falls back to the raw slug if the control element is not found.
+  function updateActiveList() {
+    document.querySelectorAll("[data-filter-active-list]").forEach((container) => {
+      container.innerHTML = "";
+      for (const [dim, values] of state) {
+        for (const slug of values) {
+          const controlEl = document.querySelector(
+            `[data-filter-value="${CSS.escape(slug)}"][data-filter-dimension="${CSS.escape(dim)}"]`
+          );
+          const label = controlEl ? controlEl.textContent.trim() : slug;
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "filter-chip";
+          chip.textContent = label;
+          chip.addEventListener("click", () => removeFilterValue(dim, slug));
+          container.appendChild(chip);
+        }
+      }
+    });
+  }
+
+  function removeFilterValue(dim, slug) {
+    const active = state.get(dim);
+    if (active) {
+      active.delete(slug);
+      if (active.size === 0) state.delete(dim);
+    }
+    currentPage = 1;
+    updateUrl();
+    filterAndRender();
+  }
+
+  // Show [data-filter-clear] only when at least one filter is active.
+  function updateClearButton() {
+    const hasActive = state.size > 0;
+    document.querySelectorAll("[data-filter-clear]").forEach((el) => {
+      el.hidden = !hasActive;
+    });
+  }
+
+  function attachClearListeners() {
+    document.querySelectorAll("[data-filter-clear]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        state.clear();
+        currentPage = 1;
+        updateUrl();
+        filterAndRender();
+      });
     });
   }
 })();
