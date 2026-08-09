@@ -27,6 +27,8 @@
   }
 
   const { jsonUrl, pageSize, gridSelector, dimensions } = config;
+  const paginationWindow = config.window ?? 2;
+  const paginationBoundary = config.boundary ?? 1;
   const grid = document.querySelector(gridSelector);
   if (!grid) return;
 
@@ -168,7 +170,7 @@
     const pageRecords = filtered.slice(start, start + size);
 
     renderCards(pageRecords);
-    renderPagination(currentPage, totalPages, total);
+    renderPagination(currentPage, totalPages);
   }
 
   function renderCards(records) {
@@ -258,7 +260,25 @@
 
   let paginationEl = null;
 
-  function renderPagination(page, totalPages, total) {
+  // Exact JS equivalent of krizky's Python _pagination_pages().
+  // Returns array of page numbers with null for ellipsis gaps.
+  function paginationPages(current, total, win, boundary) {
+    const visible = new Set();
+    for (let i = 1; i <= Math.min(boundary, total); i++) visible.add(i);
+    for (let i = Math.max(total - boundary + 1, 1); i <= total; i++) visible.add(i);
+    for (let i = Math.max(1, current - win); i <= Math.min(total, current + win); i++) visible.add(i);
+
+    const result = [];
+    let prev = null;
+    for (const p of [...visible].sort((a, b) => a - b)) {
+      if (prev !== null && p - prev > 1) result.push(null);
+      result.push(p);
+      prev = p;
+    }
+    return result;
+  }
+
+  function renderPagination(page, totalPages) {
     if (!paginationEl) {
       paginationEl = document.querySelector("[data-filter-pagination]");
     }
@@ -266,25 +286,44 @@
 
     if (totalPages <= 1) {
       paginationEl.hidden = true;
+      paginationEl.innerHTML = "";
       return;
     }
 
-    paginationEl.hidden = false;
-    const prevBtn = paginationEl.querySelector("[data-filter-prev]");
-    const nextBtn = paginationEl.querySelector("[data-filter-next]");
-    const info = paginationEl.querySelector("[data-filter-page-info]");
+    const hasPrev = page > 1;
+    const hasNext = page < totalPages;
 
-    if (prevBtn) {
-      prevBtn.disabled = page <= 1;
-      prevBtn.onclick = () => { currentPage--; filterAndRender(); };
-    }
-    if (nextBtn) {
-      nextBtn.disabled = page >= totalPages;
-      nextBtn.onclick = () => { currentPage++; filterAndRender(); };
-    }
-    if (info) {
-      info.textContent = `${page} / ${totalPages}`;
-    }
+    const prevBtn = hasPrev
+      ? `<a href="#" class="page-btn page-prev" data-filter-prev><span class="arrow">‹</span> <span class="btn-text">předchozí</span></a>`
+      : `<span class="page-btn page-prev is-disabled"><span class="arrow">‹</span> <span class="btn-text">předchozí</span></span>`;
+
+    const nextBtn = hasNext
+      ? `<a href="#" class="page-btn page-next" data-filter-next><span class="btn-text">další</span> <span class="arrow">›</span></a>`
+      : `<span class="page-btn page-next is-disabled"><span class="btn-text">další</span> <span class="arrow">›</span></span>`;
+
+    const pages = paginationPages(page, totalPages, paginationWindow, paginationBoundary);
+    const items = pages
+      .map((p) => {
+        if (p === null) return `<li class="page-dots" aria-hidden="true">&hellip;</li>`;
+        if (p === page) return `<li><a class="page-num is-current" aria-current="page">${p}</a></li>`;
+        return `<li><a href="#" class="page-num" data-filter-page="${p}">${p}</a></li>`;
+      })
+      .join("");
+
+    paginationEl.innerHTML = `<nav class="pagination" aria-label="Stránkování">${prevBtn}<ul class="page-list">${items}</ul>${nextBtn}</nav>`;
+    paginationEl.hidden = false;
+
+    const prev = paginationEl.querySelector("[data-filter-prev]");
+    const next = paginationEl.querySelector("[data-filter-next]");
+    if (prev) prev.addEventListener("click", (e) => { e.preventDefault(); currentPage--; filterAndRender(); });
+    if (next) next.addEventListener("click", (e) => { e.preventDefault(); currentPage++; filterAndRender(); });
+    paginationEl.querySelectorAll("[data-filter-page]").forEach((a) => {
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        currentPage = parseInt(a.dataset.filterPage, 10);
+        filterAndRender();
+      });
+    });
   }
 
   // ── Pill active states ────────────────────────────────────────────────────

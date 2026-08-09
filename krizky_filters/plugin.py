@@ -50,6 +50,8 @@ def _build_filter_config(page_cfg: dict, config: dict) -> dict:
         "jsonUrl": json_url,
         "pageSize": page_cfg.get("paginate_by") or site_cfg.get("paginate_by") or 0,
         "gridSelector": "[data-filter-grid]",
+        "window": site_cfg.get("pagination_window", 2),
+        "boundary": site_cfg.get("pagination_boundary", 1),
         "dimensions": dimensions,
     }
 
