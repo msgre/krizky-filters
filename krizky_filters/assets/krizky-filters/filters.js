@@ -42,6 +42,10 @@
     .then((r) => r.json())
     .then((data) => {
       allRecords = data;
+      // Hide static (server-rendered) pagination — JS takes over from here.
+      document.querySelectorAll("[data-static-pagination]").forEach((el) => {
+        el.hidden = true;
+      });
       parseUrlState();
       attachPillListeners();
       window.addEventListener("popstate", () => {

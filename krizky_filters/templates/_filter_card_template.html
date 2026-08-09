@@ -5,3 +5,17 @@
   {%- endwith %}
 </template>
 {% endif %}
+
+{% if page_name in page_filters %}
+<div data-filter-pagination hidden>
+  <nav class="pagination" aria-label="Stránkování">
+    <button type="button" class="page-btn page-prev" data-filter-prev>
+      <span class="arrow">‹</span> <span class="btn-text">předchozí</span>
+    </button>
+    <span class="page-info" data-filter-page-info></span>
+    <button type="button" class="page-btn page-next" data-filter-next>
+      <span class="btn-text">další</span> <span class="arrow">›</span>
+    </button>
+  </nav>
+</div>
+{% endif %}
