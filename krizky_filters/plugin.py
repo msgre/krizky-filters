@@ -46,7 +46,7 @@ def _build_filter_config(page_cfg: dict, config: dict) -> dict:
             entry["many"] = True
         dimensions[dim_key] = entry
 
-    photos_base_url = config.get("sources", {}).get("photos", {}).get("base_url", "")
+    photos_base_url = config.get("sources", {}).get("photos", {}).get("base_url", "").rstrip("/")
 
     return {
         "jsonUrl": json_url,
