@@ -244,14 +244,17 @@
       if (count === 0) {
         if (facetsMode === "hide") {
           wrap.hidden = true;
+          wrap.setAttribute("data-facet-hidden", "");
         } else {
           wrap.classList.add("is-disabled");
           wrap.setAttribute("aria-disabled", "true");
+          wrap.removeAttribute("data-facet-hidden");
         }
       } else {
         wrap.hidden = false;
         wrap.classList.remove("is-disabled");
         wrap.removeAttribute("aria-disabled");
+        wrap.removeAttribute("data-facet-hidden");
       }
 
       if (!dimAvailable[dim]) dimAvailable[dim] = 0;
