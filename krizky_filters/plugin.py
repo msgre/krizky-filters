@@ -62,6 +62,7 @@ def _build_filter_config(page_cfg: dict, config: dict) -> dict:
         entry: dict = {
             "label": dim_cfg["label"],
             "type": dim_cfg.get("type", "multiselect"),
+            "sort": dim_cfg.get("sort", "count"),
         }
         if dim_cfg.get("many"):
             entry["many"] = True

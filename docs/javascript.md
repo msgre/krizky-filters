@@ -120,6 +120,7 @@ Aktivují se v configu (`filters.facets: true`). Po každém updatu filtru:
 3. Aktualizuje DOM: každý `[data-facet-count]` element uvnitř `[data-filter-value]` dostane nový count
 4. Podle `facetsMode` skryje/znepřístupní hodnoty s count = 0
 5. Celé dimenze bez dostupných hodnot označí jako `is-disabled` (kromě dimenze s aktivní hodnotou — tam musí zůstat cesta ven)
+6. **Přerovná DOM elementy** podle `sort` klíče dimenze — se stejnou logikou jako Python side (viz [configuration.md#sortování](configuration.md#sortování)). Při shift ze static counts na facet counts se hodnoty automaticky přeuspořádají (např. `sort: -count,alpha` posune nejčastější dostupnou hodnotu na začátek). Pořadí drží stejný sort spec jako build-time — konzistentní s tím, co vidí uživatel bez JS.
 
 **Data hooks pro facety:**
 

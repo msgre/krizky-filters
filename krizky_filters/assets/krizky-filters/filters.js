@@ -226,6 +226,74 @@
     return facets;
   }
 
+  // ── Sort (parallel to Python values.py::_parse_sort) ─────────────────────
+
+  const SORT_ALIASES = {
+    count: "-count,alpha",   // popularity preset
+    alpha: "alpha",
+  };
+
+  function parseSort(spec) {
+    let s = (spec || "count").trim();
+    if (s in SORT_ALIASES) s = SORT_ALIASES[s];
+    const out = [];
+    for (let part of s.split(",")) {
+      part = part.trim();
+      if (!part) continue;
+      const desc = part.startsWith("-");
+      const field = part.replace(/^-+/, "");
+      if (field === "count" || field === "alpha") out.push([field, desc]);
+    }
+    return out;
+  }
+
+  // Locale-friendly alpha key — strips diacritics so 'č' sorts near 'c'.
+  function sortKeyAlpha(text) {
+    return (text || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
+  }
+
+  // Re-order [data-filter-value] elements per dimension based on their current
+  // facet counts + display label. Called after applyFacets to sync DOM with
+  // dynamic counts.
+  function reorderValues() {
+    const groups = new Map();
+    document.querySelectorAll("[data-filter-value][data-filter-dimension]").forEach((el) => {
+      const dim = el.dataset.filterDimension;
+      if (!groups.has(dim)) groups.set(dim, []);
+      groups.get(dim).push(el);
+    });
+
+    for (const [dim, items] of groups) {
+      const dimCfg = dimensions[dim];
+      if (!dimCfg) continue;
+      const parsed = parseSort(dimCfg.sort);
+      if (parsed.length === 0) continue;
+
+      const wrapped = items.map((el) => {
+        const wrap = el.closest("[data-combobox-option]") || el;
+        const countEl = el.querySelector("[data-facet-count]");
+        const count = countEl ? (parseInt(countEl.textContent, 10) || 0) : 0;
+        const labelEl = el.querySelector(".fbar-item-label");
+        const label = labelEl ? labelEl.textContent : el.textContent;
+        return { wrap, count, alphaKey: sortKeyAlpha(label) };
+      });
+
+      // Stable sort: apply least-significant key first.
+      for (const [field, desc] of [...parsed].reverse()) {
+        wrapped.sort((a, b) => {
+          const va = field === "count" ? a.count : a.alphaKey;
+          const vb = field === "count" ? b.count : b.alphaKey;
+          if (va < vb) return desc ? 1 : -1;
+          if (va > vb) return desc ? -1 : 1;
+          return 0;
+        });
+      }
+
+      const parent = wrapped.length > 0 ? wrapped[0].wrap.parentNode : null;
+      if (parent) wrapped.forEach(({ wrap }) => parent.appendChild(wrap));
+    }
+  }
+
   // Apply facet counts to the DOM: update count elements, hide/disable
   // zero-count values, disable dims where nothing is available.
   function applyFacets(facets) {
@@ -285,7 +353,10 @@
     updateClearButton();
 
     const facets = facetsEnabled ? computeFacets() : null;
-    if (facets) applyFacets(facets);
+    if (facets) {
+      applyFacets(facets);
+      reorderValues();
+    }
 
     const total = filtered.length;
     const size = pageSize > 0 ? pageSize : total;

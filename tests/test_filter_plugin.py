@@ -296,6 +296,20 @@ def test_build_filter_config_facets_enabled(minimal_config):
     assert cfg["facetsMode"] == "disable"
 
 
+def test_build_filter_config_sort_propagated(minimal_config):
+    """Sort spec must be exposed to JS so runtime re-sort matches build-time."""
+    page_cfg = dict(minimal_config["site"]["pages"]["vsechna_mista"])
+    page_cfg["filters"] = {
+        "dimensions": {
+            "typ": {"label": "Typ", "type": "select", "sort": "-count,alpha"},
+            "datace": {"label": "Datace", "type": "select"},  # default
+        },
+    }
+    cfg = _build_filter_config(page_cfg, minimal_config)
+    assert cfg["dimensions"]["typ"]["sort"] == "-count,alpha"
+    assert cfg["dimensions"]["datace"]["sort"] == "count"
+
+
 # ── plugin.py — _resolve_url_template ────────────────────────────────────────
 
 
