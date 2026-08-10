@@ -70,6 +70,7 @@ Pro každou dimenzi:
 | `type` | `select` \| `multiselect` | UI hint |
 | `many` | bool | `true` pokud sloupec obsahuje JSON pole hodnot (jako tagy) |
 | `url` | string | URL šablona s `{slug}` placeholderem pro `href` pill/checkbox elementu (viz níže) |
+| `sort` | string | Pořadí hodnot v seznamu — preset (`count` \| `alpha`) nebo explicitní multi-column (`-count,alpha`); viz [Sortování](#sortování) |
 
 #### `type: select` vs `multiselect`
 
@@ -99,6 +100,51 @@ URL šablona s `{slug}` placeholderem — použije se jako `href` na pill/checkb
 - SEO: crawler najde odkazy na category stránky
 
 Pokud není uveden, plugin **automaticky** hledá matching category stránku v `pages:` (viz [Auto-detekce URL](#auto-detekce-url) níže). Pokud nic nenajde, pill nemá `href` (jen `#`).
+
+## Sortování
+
+`sort` klíč u dimenze určuje pořadí hodnot ve widgetu. Podporovány jsou dva formáty:
+
+### Presety (shorthand)
+
+- **`count`** (default) — nejčastější hodnota nahoře; při shodě počtu abecedně (alias pro `-count,alpha`)
+- **`alpha`** — abecedně ASC, locale-friendly (diakritika se ignoruje, takže "čáp" se řadí mezi c-slova, ne za "z")
+
+### Explicitní multi-column
+
+Comma-separated seznam polí s volitelným `-` prefixem pro DESC. Podporovaná pole: `count`, `alpha`.
+
+```yaml
+sort: "-count,alpha"     # count DESC, alpha ASC tiebreaker (== preset "count")
+sort: "alpha,-count"     # alpha ASC primární, count DESC tiebreaker
+sort: "-alpha"           # alpha DESC (Z→A)
+sort: "count"            # count ASC (bez `-` prefixu)
+```
+
+> Kvůli YAML doporučuji hodnotu s `-` prefixem citovat (`"-count"` místo `-count`), byť oba tvary fungují.
+
+### Per-dimenze
+
+Různé dimenze mohou mít různé strategie:
+
+```yaml
+dimensions:
+  typ:
+    label: Typ
+    type: select
+    sort: alpha              # ~10 kategorií — abecedně se dobře prochází
+  stitky:
+    label: Štítek
+    type: multiselect
+    many: true
+    sort: count              # ~50 tagů — populární nahoře pomůže exploraci
+  datace:
+    label: Datace
+    type: select
+    sort: "-alpha,-count"    # od nejnovější k nejstarší (např. „2020s", „2010s"...)
+```
+
+Neznámé pole vyhodí `ValueError` při buildu — chytí typo.
 
 ## Auto-detekce URL
 

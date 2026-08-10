@@ -29,7 +29,9 @@ Kontext, který má šablona k dispozici:
 | `_dim["values"][i].value` | string | Zobrazovaná hodnota (např. „Kříž") |
 | `_dim["values"][i].slug` | string | Slug (např. „kriz") |
 | `_dim["values"][i].url` | string | URL šablona s vyplněným slugem (nebo prázdný string) |
-| `_dim["values"][i].count` | int | Počet záznamů s touto hodnotou |
+| `_dim["values"][i].count` | int | Počet záznamů s touto hodnotou (statický, spočítaný při buildu) |
+
+Pořadí `_dim["values"]` je určeno klíčem `sort` v configu dimenze (default: count DESC, alpha ASC tiebreaker). Podrobnosti [configuration.md#sortování](configuration.md#sortování).
 
 > **Pozor:** `values` je klíč slovníku, ne atribut, protože `_dim.values` v Jinja2 koliduje s built-in `.values()` metodou dict. Vždy `_dim["values"]`.
 
@@ -103,14 +105,45 @@ Kromě filter controls dodává plugin i JS hooky pro doplňkové elementy widge
 | `[data-filter-grid]` | Kontejner, do kterého JS renderuje karty |
 | `[data-filter-pagination]` | Kontejner pro JS stránkování (JS ho naplní) |
 | `[data-static-pagination]` | Wrapper okolo statického paginátoru — JS ho skryje, když aktivně stránkuje |
+| `[data-facet-count]` | (Facety) Element uvnitř `[data-filter-value]` — JS zapisuje aktualizovaný count |
+| `[data-combobox]` s `[data-combobox-dim="X"]` | JS přepíná `is-disabled` třídu, když dimenze nemá dostupné hodnoty (facet mode) |
 
 Detaily [javascript.md](javascript.md).
+
+## Facet-aware widget
+
+Když je v configu `filters.facets: true`, plugin JS po každé změně filtru:
+
+- Přepíše text v `[data-facet-count]` element uvnitř každého `[data-filter-value]` na aktuální dynamický count
+- Podle `facets_mode` skryje (`hidden` + `data-facet-hidden` atribut) nebo znepřístupní (`is-disabled` třída + `aria-disabled`) hodnoty s count = 0
+- Přidá `is-disabled` třídu na `[data-combobox]` kontejnery bez dostupných hodnot
+
+**Widget šablona pro facety** — přidej `data-facet-count` atribut ke count elementu:
+
+```jinja2
+<a class="fbar-item"
+   data-filter-value="{{ _v.slug }}"
+   data-filter-dimension="{{ _dim_key }}">
+  <span class="fbar-item-label">{{ _v.value }}</span>
+  <span class="fbar-item-count" data-facet-count>{{ _v.count }}</span>
+</a>
+```
+
+Jinak není třeba nic měnit — plugin JS najde elementy sám podle `data-filter-*` atributů a manipuluje s nimi.
+
+**Vlastní widget vs standardní DOM update:**
+
+Když widget nechce, aby plugin manipuloval s DOM (např. custom combobox s vlastní hide/show logikou), stačí neuvádět `data-facet-count` (žádný text se neaktualizuje) nebo nepoužívat `[data-combobox-option]`/`[data-combobox]` wrappers. Plugin update pak není destruktivní pro custom UI — jen updatuje třídy na `[data-filter-value]` elementu.
+
+Alternativně widget může poslouchat `krizky-filters:update` event a číst `e.detail.facets[dim][slug]` — plný přehled o dostupných počtech. Viz [javascript.md](javascript.md#facets).
 
 ## CSS class hooks
 
 | Class | Použití |
 |---|---|
 | `.pill--active` | JS ji přepíná na `[data-filter-value]` elementech podle aktivního stavu |
+| `.is-disabled` | JS ji přepíná na dimenzi kontejneru (`[data-combobox]`) nebo na jednotlivých hodnotách (facet mode `disable`) |
+| `[data-facet-hidden]` | JS ho přidává na hodnoty skryté kvůli facetě — combobox JS ho musí respektovat při search (neodemykat) |
 | Vše ostatní | Volitelné — projekt si stylizuje, jak chce |
 
 CSS pluginu (`filters.css`) obsahuje jen minimum — základní styly pro `.filter-widget`, `.filter-chip`, `.filter-active` a loading state gridu. Projekt s vlastním designem toto obvykle nepotřebuje.

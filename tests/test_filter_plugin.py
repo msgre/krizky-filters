@@ -115,6 +115,89 @@ def test_fetch_filter_values_structure(conn):
         assert "count" in v
 
 
+def test_fetch_filter_values_sort_by_count(conn):
+    """Default sort: most frequent first."""
+    values = fetch_filter_values(conn, "mista", "typ", {"label": "Typ", "type": "select"})
+    # Fixture has 2× kriz, 1× socha → kriz first
+    assert values[0]["slug"] == "kriz"
+    assert values[0]["count"] == 2
+    assert values[1]["slug"] == "socha"
+    assert values[1]["count"] == 1
+
+
+def test_fetch_filter_values_sort_alpha(conn):
+    """Explicit sort: alpha (locale-friendly, diacritics stripped)."""
+    values = fetch_filter_values(
+        conn, "mista", "typ",
+        {"label": "Typ", "type": "select", "sort": "alpha"},
+    )
+    # kriz < socha alphabetically
+    assert [v["slug"] for v in values] == ["kriz", "socha"]
+
+
+def test_fetch_filter_values_sort_alpha_diacritics():
+    """'č' should sort near 'c', not after 'z'."""
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    c.execute("CREATE TABLE t (val TEXT, val_slug TEXT)")
+    c.executemany("INSERT INTO t VALUES (?, ?)", [
+        ("zebra", "zebra"),
+        ("čáp", "cap"),
+        ("banán", "banan"),
+    ])
+    c.commit()
+    values = fetch_filter_values(
+        c, "t", "val",
+        {"label": "V", "type": "select", "sort": "alpha"},
+    )
+    slugs = [v["slug"] for v in values]
+    # Expected: banán, čáp, zebra (č sorts with c, not after z)
+    assert slugs == ["banan", "cap", "zebra"]
+    c.close()
+
+
+def test_fetch_filter_values_sort_explicit_multicolumn(conn):
+    """Explicit multi-column: -count,alpha equivalent to preset 'count'."""
+    v1 = fetch_filter_values(conn, "mista", "typ",
+                             {"label": "T", "type": "select", "sort": "count"})
+    v2 = fetch_filter_values(conn, "mista", "typ",
+                             {"label": "T", "type": "select", "sort": "-count,alpha"})
+    assert [v["slug"] for v in v1] == [v["slug"] for v in v2]
+
+
+def test_fetch_filter_values_sort_reversed_priority(conn):
+    """Alpha ASC as primary, count DESC as tiebreaker."""
+    values = fetch_filter_values(conn, "mista", "typ",
+                                 {"label": "T", "type": "select", "sort": "alpha,-count"})
+    # kriz < socha alphabetically, so kriz first regardless of count
+    assert [v["slug"] for v in values] == ["kriz", "socha"]
+
+
+def test_fetch_filter_values_sort_alpha_desc():
+    """Alpha DESC sorts Z→A."""
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    c.execute("CREATE TABLE t (val TEXT, val_slug TEXT)")
+    c.executemany("INSERT INTO t VALUES (?, ?)", [
+        ("apple", "apple"),
+        ("banana", "banana"),
+        ("cherry", "cherry"),
+    ])
+    c.commit()
+    values = fetch_filter_values(
+        c, "t", "val", {"label": "V", "type": "select", "sort": "-alpha"},
+    )
+    assert [v["slug"] for v in values] == ["cherry", "banana", "apple"]
+    c.close()
+
+
+def test_fetch_filter_values_sort_invalid_field(conn):
+    """Unknown field should raise a clear ValueError."""
+    with pytest.raises(ValueError, match="Unknown sort field"):
+        fetch_filter_values(conn, "mista", "typ",
+                            {"label": "T", "type": "select", "sort": "banana"})
+
+
 # ── json_gen.py ───────────────────────────────────────────────────────────────
 
 
