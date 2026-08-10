@@ -36,6 +36,8 @@
   const { jsonUrl, basePath, pageSize, gridSelector, dimensions } = config;
   const paginationWindow = config.window ?? 2;
   const paginationBoundary = config.boundary ?? 1;
+  const facetsEnabled = config.facets === true;
+  const facetsMode = config.facetsMode || "hide";  // "hide" | "disable"
   const grid = document.querySelector(gridSelector);
   if (!grid) return;
 
@@ -164,29 +166,110 @@
 
   // ── Filter ────────────────────────────────────────────────────────────────
 
+  // Extract slugs a record has for a given dimension (single or many).
+  function recordSlugs(record, dim) {
+    const dimCfg = dimensions[dim];
+    if (!dimCfg) return [];
+    const val = record[dim];
+    if (dimCfg.many) {
+      const valArr = Array.isArray(val) ? val : [];
+      const slugObj = record[dim + "_slug"];
+      return (slugObj && typeof slugObj === "object" && !Array.isArray(slugObj))
+        ? valArr.map((v) => slugObj[v] ?? String(v))
+        : valArr.map(String);
+    }
+    return [String(record[dim + "_slug"] ?? val ?? "")];
+  }
+
+  // True if a record matches the filter on ONE dimension (OR within dim).
+  function matchesDim(record, dim, active) {
+    if (active.size === 0) return true;
+    return recordSlugs(record, dim).some((s) => active.has(s));
+  }
+
+  // True if a record matches ALL active filters (AND between dims).
   function matchesFilter(record) {
     for (const [dim, active] of state) {
-      if (active.size === 0) continue;
-      const dimCfg = dimensions[dim];
-      if (!dimCfg) continue;
-      const val = record[dim];
-
-      if (dimCfg.many) {
-        // OR within dimension: at least one value's slug must be active.
-        // stitky_slug is a {value: slug} object — use it to resolve slugs.
-        const valArr = Array.isArray(val) ? val : [];
-        const slugObj = record[dim + "_slug"];
-        const slugArr = (slugObj && typeof slugObj === "object" && !Array.isArray(slugObj))
-          ? valArr.map((v) => slugObj[v] ?? String(v))
-          : valArr.map(String);
-        if (!slugArr.some((s) => active.has(s))) return false;
-      } else {
-        // OR within dimension: prefer {dim}_slug field over raw value field.
-        const slugVal = String(record[dim + "_slug"] ?? val ?? "");
-        if (!active.has(slugVal)) return false;
-      }
+      if (!matchesDim(record, dim, active)) return false;
     }
     return true;
+  }
+
+  // Records that match every active filter EXCEPT the one on `excludeDim`.
+  // Used for faceted counting: available values per dim reflect the intersection
+  // of all OTHER active filters (facet self-exclusion rule).
+  function matchesAllExcept(record, excludeDim) {
+    for (const [dim, active] of state) {
+      if (dim === excludeDim) continue;
+      if (!matchesDim(record, dim, active)) return false;
+    }
+    return true;
+  }
+
+  // ── Facets ────────────────────────────────────────────────────────────────
+
+  // For each dim, count how many records would have each slug value
+  // if only OTHER dims' filters were applied.
+  function computeFacets() {
+    const facets = {};
+    for (const dim of Object.keys(dimensions)) {
+      const subset = allRecords.filter((r) => matchesAllExcept(r, dim));
+      const counts = {};
+      for (const record of subset) {
+        for (const slug of recordSlugs(record, dim)) {
+          if (!slug) continue;
+          counts[slug] = (counts[slug] || 0) + 1;
+        }
+      }
+      facets[dim] = counts;
+    }
+    return facets;
+  }
+
+  // Apply facet counts to the DOM: update count elements, hide/disable
+  // zero-count values, disable dims where nothing is available.
+  function applyFacets(facets) {
+    const dimAvailable = {};
+
+    document.querySelectorAll("[data-filter-value][data-filter-dimension]").forEach((el) => {
+      const dim = el.dataset.filterDimension;
+      const slug = el.dataset.filterValue;
+      const count = (facets[dim] && facets[dim][slug]) || 0;
+
+      // Update visible count if a count element exists
+      const countEl = el.querySelector("[data-facet-count]");
+      if (countEl) countEl.textContent = count;
+
+      const wrap = el.closest("[data-combobox-option]") || el;
+      if (count === 0) {
+        if (facetsMode === "hide") {
+          wrap.hidden = true;
+        } else {
+          wrap.classList.add("is-disabled");
+          wrap.setAttribute("aria-disabled", "true");
+        }
+      } else {
+        wrap.hidden = false;
+        wrap.classList.remove("is-disabled");
+        wrap.removeAttribute("aria-disabled");
+      }
+
+      if (!dimAvailable[dim]) dimAvailable[dim] = 0;
+      if (count > 0) dimAvailable[dim] += 1;
+    });
+
+    // Disable whole dimension when nothing is available (unless it has an
+    // active filter — user must be able to unset it).
+    document.querySelectorAll("[data-combobox]").forEach((cb) => {
+      const dim = cb.dataset.comboboxDim;
+      if (!dim) return;
+      const hasActive = state.has(dim) && state.get(dim).size > 0;
+      const hasAvailable = (dimAvailable[dim] || 0) > 0;
+      const disabled = !hasActive && !hasAvailable;
+      cb.classList.toggle("is-disabled", disabled);
+      const trigger = cb.querySelector("[data-combobox-trigger]");
+      if (trigger) trigger.setAttribute("aria-disabled", String(disabled));
+    });
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -197,6 +280,9 @@
     updateFilterCount(filtered.length, allRecords.length);
     updateActiveList();
     updateClearButton();
+
+    const facets = facetsEnabled ? computeFacets() : null;
+    if (facets) applyFacets(facets);
 
     const total = filtered.length;
     const size = pageSize > 0 ? pageSize : total;
@@ -215,6 +301,7 @@
         filtered: filtered.length,
         total: allRecords.length,
         activeState: Object.fromEntries([...state].map(([k, v]) => [k, [...v]])),
+        facets: facets,  // null when facets disabled
       },
     }));
   }

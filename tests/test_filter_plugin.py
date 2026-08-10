@@ -194,6 +194,25 @@ def test_build_filter_config_page_size(minimal_config):
     assert cfg["pageSize"] == 10
 
 
+def test_build_filter_config_facets_disabled_by_default(minimal_config):
+    page_cfg = minimal_config["site"]["pages"]["vsechna_mista"]
+    cfg = _build_filter_config(page_cfg, minimal_config)
+    assert cfg["facets"] is False
+    assert cfg["facetsMode"] == "hide"
+
+
+def test_build_filter_config_facets_enabled(minimal_config):
+    page_cfg = dict(minimal_config["site"]["pages"]["vsechna_mista"])
+    page_cfg["filters"] = {
+        "facets": True,
+        "facets_mode": "disable",
+        "dimensions": {"typ": {"label": "Typ", "type": "select"}},
+    }
+    cfg = _build_filter_config(page_cfg, minimal_config)
+    assert cfg["facets"] is True
+    assert cfg["facetsMode"] == "disable"
+
+
 # ── plugin.py — _resolve_url_template ────────────────────────────────────────
 
 

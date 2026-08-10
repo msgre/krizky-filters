@@ -24,6 +24,8 @@ site:
           - typ
           - typ_slug
         card_template: _karta_filter.html   # POVINNÉ
+        facets: true                    # volitelně: fasetový režim
+        facets_mode: hide               # hide | disable (default: hide)
         dimensions:
           typ:
             label: Typ                    # POVINNÉ — text v triggeru
@@ -130,6 +132,24 @@ pages:
         typ: {label: Typ, type: select}                        # url = /kategorie/{slug}.html
         stitky: {label: Štítek, type: multiselect, many: true} # url = /stitek/{slug}.html
 ```
+
+## Facets (dynamické počty a skrývání)
+
+Když `facets: true`, plugin dynamicky přepočítá počty u každé hodnoty na základě aktuálně aktivních filtrů z ostatních dimenzí. Hodnoty, které by po aplikaci vedly k prázdnému výsledku, se skryjí (nebo znepřístupní podle `facets_mode`).
+
+**Pravidlo self-exclusion**: při výpočtu counts pro dimenzi X se aplikují všechny ostatní filtry, ale ne filtr na X. Uživatel tak vidí "kolik výsledků bych měl, kdybych přepnul hodnotu v X".
+
+**`facets_mode`**:
+- `hide` (default) — hodnoty s count = 0 se skryjí (`hidden`), dimenze s nulou dostupných hodnot se znepřístupní
+- `disable` — hodnoty s count = 0 se šedě zabarví (třída `is-disabled`, `aria-disabled`, `pointer-events: none`), zůstávají viditelné
+
+Když je aktivní hodnota jako součást URL, ale nemá záznamy pod ostatními filtry (count = 0), dimenze zůstane přístupná, aby ji uživatel mohl odebrat — jinak by byl v pasti.
+
+Vlastnosti přepočtu:
+- Cost per update: O(dimensions × records × avgSlugsPerRecord) — pro 600 záznamů a 3 dimenze pár ms, u velkých datasetů (10k+) zvažuj optimalizace
+- Facet counts jsou vysílány ve `krizky-filters:update` event (`detail.facets`), takže vlastní widgety je mohou zobrazovat vlastním způsobem
+
+Viz [javascript.md](javascript.md#facets) pro detaily JS API.
 
 ## Kontext fotek
 

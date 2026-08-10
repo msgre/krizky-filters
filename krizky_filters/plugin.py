@@ -77,6 +77,8 @@ def _build_filter_config(page_cfg: dict, config: dict) -> dict:
         "gridSelector": "[data-filter-grid]",
         "window": site_cfg.get("pagination_window", 2),
         "boundary": site_cfg.get("pagination_boundary", 1),
+        "facets": bool(filters_cfg.get("facets", False)),
+        "facetsMode": filters_cfg.get("facets_mode", "hide"),
         "dimensions": dimensions,
     }
 

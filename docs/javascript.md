@@ -14,6 +14,10 @@ document.dispatchEvent(new CustomEvent("krizky-filters:update", {
     activeState: {              // aktivní filtry po dimenzích
       typ: ["kriz"],
       stitky: ["baroko", "hrbitov"]
+    },
+    facets: {                   // null když facets: false; jinak počty per dimension
+      typ: { kriz: 61, socha: 3, ... },
+      stitky: { baroko: 42, hrbitov: 19, ... }
     }
   }
 }));
@@ -106,6 +110,39 @@ Při inicializaci `data-filter-count-orig` uchová původní text, JS pak jen na
 Cíl je `<template id="card-template">`, obsah renderovaný z partial souboru zadaného v `filters.card_template`. JS klonuje jeho `content` per záznam.
 
 Podrobnosti: [card-template.md](card-template.md).
+
+## Facets
+
+Aktivují se v configu (`filters.facets: true`). Po každém updatu filtru:
+
+1. Pro každou dimenzi X spočítá `subset` = záznamy odpovídající všem AKTIVNÍM filtrům KROMĚ filtru na X
+2. Pro každou hodnotu V v X spočítá, kolikrát se V vyskytuje v `subset`
+3. Aktualizuje DOM: každý `[data-facet-count]` element uvnitř `[data-filter-value]` dostane nový count
+4. Podle `facetsMode` skryje/znepřístupní hodnoty s count = 0
+5. Celé dimenze bez dostupných hodnot označí jako `is-disabled` (kromě dimenze s aktivní hodnotou — tam musí zůstat cesta ven)
+
+**Data hooks pro facety:**
+
+| Atribut | Chování |
+|---|---|
+| `[data-facet-count]` uvnitř `[data-filter-value]` | JS zapisuje aktualizovaný count |
+| `[data-combobox]` / `.fbar-dim` | JS přepíná `is-disabled` třídu podle dostupnosti |
+| `[data-combobox-option]` (nebo `[data-filter-value]` samotný když není zabaleno) | JS přepíná `hidden` (mode: hide) nebo `is-disabled` (mode: disable) |
+
+**Vlastní widget s facetami:**
+
+Poslouchej `krizky-filters:update` event a čti `e.detail.facets[dim][slug]`. Můžeš úplně bypassovat plugin DOM update tím, že vlastní widget nepoužívá standardní hierarchie — plugin update je pak "best effort" a nic nerozbije.
+
+```javascript
+document.addEventListener("krizky-filters:update", (e) => {
+  const facets = e.detail.facets;
+  if (!facets) return;  // facets not enabled
+  // Update your own UI here
+  for (const [dim, counts] of Object.entries(facets)) {
+    console.log(`Dim ${dim}:`, counts);
+  }
+});
+```
 
 ## `#filter-config` script tag
 
