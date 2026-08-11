@@ -151,7 +151,7 @@ document.addEventListener("krizky-filters:update", (e) => {
 
 - **State**: `state.get(dim)` = `Set([queryString])` — jednoprvková množina drží dotaz jako string (pro konzistenci se zbytkem architektury)
 - **URL**: `?q=xxx` bez comma-splittingu (query může obsahovat čárku, plugin ji nerozsekne)
-- **Filter logika**: `normalizeText(record[field]).includes(normalizeText(query))` pro každé pole v `searchFields`
+- **Filter logika**: dotaz rozsekán na slova podle whitespace; **každé** slovo musí být obsaženo (jako substring) v **alespoň jednom** poli z `searchFields`. Slova se mohou nacházet v různých polích téhož záznamu.
 - **Normalizace**: `String.normalize("NFKD")` + strip combining chars → diakritika-agnostic, case-insensitive
 - **Debounce**: 200 ms (konstanta `TEXT_DEBOUNCE_MS`)
 - **Neúčastní se**: facet compute, DOM reorder, `updateFilterStates`

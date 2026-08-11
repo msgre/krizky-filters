@@ -194,15 +194,17 @@
   }
 
   // True if a record matches the filter on ONE dimension (OR within dim,
-  // substring match for text dims).
+  // word AND for text dims: split by whitespace, every word must appear in
+  // at least one of the search fields).
   function matchesDim(record, dim, active) {
     if (active.size === 0) return true;
     const dimCfg = dimensions[dim];
     if (dimCfg && dimCfg.type === "text") {
-      const query = normalizeText([...active][0]);
-      if (!query) return true;
+      const words = normalizeText([...active][0]).split(/\s+/).filter(Boolean);
+      if (words.length === 0) return true;
       const fields = dimCfg.searchFields || [];
-      return fields.some((f) => normalizeText(record[f]).includes(query));
+      const haystacks = fields.map((f) => normalizeText(record[f]));
+      return words.every((w) => haystacks.some((h) => h.includes(w)));
     }
     return recordSlugs(record, dim).some((s) => active.has(s));
   }

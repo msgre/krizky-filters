@@ -203,9 +203,19 @@ filters:
 - **Case-insensitive** — velká/malá písmena nevadí
 - **Diakritika-agnostic** — normalize NFKD + strip combining chars. „kriz" najde „kříž", „kříž" najde „kriz"
 - **Substring match** — „kap" najde jak „kaple", tak „kaplička", tak „kaplí"
+- **Word split + AND** — dotaz se rozseká na slova (podle whitespace) a **každé slovo** musí být obsaženo v **alespoň jednom** z polí `search_fields`. Slova mohou být v různých polích. Např. dotaz `kříž Zubří` matchne záznam s „Kříž u cesty" v `nazev` a „Zubří" v `umisteni`.
 - **AND s ostatními dimenzemi** — text filter platí souběžně s ostatními filtry
 - **Debounce 200 ms** — filtr se aplikuje 200 ms po posledním stisku klávesy (plynulé psaní bez lagu)
 - **URL state** — dotaz jde do `?q=xxx` v URL params (bez comma-splittingu, takže dotaz může obsahovat čárku)
+
+**Příklady:**
+
+```
+Dotaz: "boží muka"          → záznamy s "boží" AND "muka" kdekoli v polích
+Dotaz: "boz muk"            → prefix substring; najde "boží muka", "božím mukám" atd.
+Dotaz: "kaple zubří"        → "kaple" v jednom poli, "Zubří" v jiném — OK
+Dotaz: "  kříž   "          → whitespace trimnut, jedno slovo "kříž"
+```
 
 **Fields v `search_fields`:**
 
@@ -232,10 +242,11 @@ Aktuální řešení používá **naivní NFKD-normalizovaný substring match** 
 
 **Cesty k vylepšení, kdy naivní přístup nestačí:**
 
-1. **[MiniSearch](https://github.com/lucaong/minisearch)** (~7 KB gzip) — přidá tokenizaci, prefix search, fuzzy match a základní ranking. Custom `processTerm` hook umožní zapojit stejnou NFKD normalizaci. Rozumný upgrade path.
-2. **[FlexSearch](https://github.com/nextapps-de/flexsearch)** (~10 KB gzip) — nejrychlejší v pure JS. Encoders per jazyk, ale bez native podpory češtiny.
-3. **[Fuse.js](https://fusejs.io/)** (~14 KB gzip) — silné fuzzy match / tolerance překlepů, weighted fields, žádný stemmer.
-4. **Custom Czech stemmer** — pro věrné „kříž nejde jen kříž ale i kříže" chování. Bez existující lightweight knihovny pro češtinu; buď custom rule set (100–200 řádků) nebo importovat něco jako `czech-stemmer-hp`.
+1. **Quoted phrase match** (~10 řádků JS) — extension aktuálního přístupu: dotaz `"boží muka"` v uvozovkách přejde na phrase substring match místo word split + AND. Užitečné pro proper nouns / přesné citace.
+2. **[MiniSearch](https://github.com/lucaong/minisearch)** (~7 KB gzip) — přidá tokenizaci, prefix search, fuzzy match a základní ranking. Custom `processTerm` hook umožní zapojit stejnou NFKD normalizaci. Rozumný upgrade path.
+3. **[FlexSearch](https://github.com/nextapps-de/flexsearch)** (~10 KB gzip) — nejrychlejší v pure JS. Encoders per jazyk, ale bez native podpory češtiny.
+4. **[Fuse.js](https://fusejs.io/)** (~14 KB gzip) — silné fuzzy match / tolerance překlepů, weighted fields, žádný stemmer.
+5. **Custom Czech stemmer** — pro věrné „kříž nejde jen kříž ale i kříže" chování. Bez existující lightweight knihovny pro češtinu; buď custom rule set (100–200 řádků) nebo importovat něco jako `czech-stemmer-hp`.
 
 Doporučená cesta: **začni s naivní implementací**. Když uživatelé opakovaně nevidí očekávané výsledky, zvaž MiniSearch — v pluginu je jasně vyčleněná funkce `matchesText` v `filters.js`, nahradit ji indexovaným lookup je otázka ~30 řádků.
 
