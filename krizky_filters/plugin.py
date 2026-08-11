@@ -59,13 +59,18 @@ def _build_filter_config(page_cfg: dict, config: dict) -> dict:
 
     dimensions: dict = {}
     for dim_key, dim_cfg in _iter_dimensions(filters_cfg):
+        dim_type = dim_cfg.get("type", "multiselect")
         entry: dict = {
             "label": dim_cfg["label"],
-            "type": dim_cfg.get("type", "multiselect"),
-            "sort": dim_cfg.get("sort", "count"),
+            "type": dim_type,
         }
-        if dim_cfg.get("many"):
-            entry["many"] = True
+        if dim_type == "text":
+            # Text dim: JS full-text substring match over listed record fields.
+            entry["searchFields"] = list(dim_cfg.get("search_fields", []))
+        else:
+            entry["sort"] = dim_cfg.get("sort", "count")
+            if dim_cfg.get("many"):
+                entry["many"] = True
         dimensions[dim_key] = entry
 
     photos_base_url = config.get("sources", {}).get("photos", {}).get("base_url", "").rstrip("/")
@@ -118,6 +123,14 @@ class FilterPlugin:
             filters_cfg = page_cfg["filters"]
             dims: dict = {}
             for dim_key, dim_cfg in _iter_dimensions(filters_cfg):
+                if dim_cfg.get("type") == "text":
+                    # Text dim has no discrete values — widget is a text input.
+                    dims[dim_key] = {
+                        "label": dim_cfg["label"],
+                        "type": "text",
+                        "values": [],
+                    }
+                    continue
                 url_template = _resolve_url_template(config, dim_key, dim_cfg)
                 dims[dim_key] = {
                     "label": dim_cfg["label"],

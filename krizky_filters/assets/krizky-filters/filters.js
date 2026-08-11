@@ -60,6 +60,7 @@
       parseUrlState();
       attachFilterListeners();
       attachClearListeners();
+      attachTextListeners();
       window.addEventListener("popstate", () => {
         parseUrlState();
         filterAndRender();
@@ -96,9 +97,15 @@
   function parseUrlState() {
     state.clear();
     const params = new URLSearchParams(location.search);
-    for (const [dim] of Object.entries(dimensions)) {
+    for (const [dim, dimCfg] of Object.entries(dimensions)) {
       const raw = params.get(dim);
-      if (raw) state.set(dim, new Set(raw.split(",").filter(Boolean)));
+      if (!raw) continue;
+      if (dimCfg.type === "text") {
+        // Text queries can contain any character (including commas) — no split.
+        state.set(dim, new Set([raw]));
+      } else {
+        state.set(dim, new Set(raw.split(",").filter(Boolean)));
+      }
     }
     currentPage = pageFromPath(basePath);
   }
@@ -109,6 +116,11 @@
       if (values.size > 0) params.set(dim, [...values].join(","));
     }
     return params.toString();
+  }
+
+  // NFKD-normalized text (strip diacritics, lowercase) — used for full-text search.
+  function normalizeText(s) {
+    return String(s || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
   }
 
   // Build full href for page N: path encodes page number, query encodes filters.
@@ -181,9 +193,17 @@
     return [String(record[dim + "_slug"] ?? val ?? "")];
   }
 
-  // True if a record matches the filter on ONE dimension (OR within dim).
+  // True if a record matches the filter on ONE dimension (OR within dim,
+  // substring match for text dims).
   function matchesDim(record, dim, active) {
     if (active.size === 0) return true;
+    const dimCfg = dimensions[dim];
+    if (dimCfg && dimCfg.type === "text") {
+      const query = normalizeText([...active][0]);
+      if (!query) return true;
+      const fields = dimCfg.searchFields || [];
+      return fields.some((f) => normalizeText(record[f]).includes(query));
+    }
     return recordSlugs(record, dim).some((s) => active.has(s));
   }
 
@@ -213,6 +233,8 @@
   function computeFacets() {
     const facets = {};
     for (const dim of Object.keys(dimensions)) {
+      // Text dims have no discrete values — nothing to facet-count.
+      if (dimensions[dim].type === "text") continue;
       const subset = allRecords.filter((r) => matchesAllExcept(r, dim));
       const counts = {};
       for (const record of subset) {
@@ -351,6 +373,7 @@
     updateFilterCount(filtered.length, allRecords.length);
     updateActiveList();
     updateClearButton();
+    syncTextInputs();
 
     const facets = facetsEnabled ? computeFacets() : null;
     if (facets) {
@@ -654,6 +677,45 @@
         currentPage = 1;
         updateUrl();
         filterAndRender();
+      }
+    });
+  }
+
+  // ── Text input (full-text search) ─────────────────────────────────────────
+
+  const TEXT_DEBOUNCE_MS = 200;
+
+  function attachTextListeners() {
+    document.querySelectorAll("[data-filter-text-dimension]").forEach((input) => {
+      const dim = input.dataset.filterTextDimension;
+      if (!dimensions[dim] || dimensions[dim].type !== "text") return;
+      let timer = null;
+      input.addEventListener("input", () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          const q = input.value.trim();
+          if (q) {
+            state.set(dim, new Set([q]));
+          } else {
+            state.delete(dim);
+          }
+          currentPage = 1;
+          updateUrl();
+          filterAndRender();
+        }, TEXT_DEBOUNCE_MS);
+      });
+    });
+  }
+
+  // Reflect URL state back into text inputs (popstate / initial load).
+  // Skip inputs currently focused so we never overwrite what the user is typing.
+  function syncTextInputs() {
+    document.querySelectorAll("[data-filter-text-dimension]").forEach((input) => {
+      const dim = input.dataset.filterTextDimension;
+      const active = state.get(dim);
+      const val = (active && active.size > 0) ? [...active][0] : "";
+      if (document.activeElement !== input && input.value !== val) {
+        input.value = val;
       }
     });
   }

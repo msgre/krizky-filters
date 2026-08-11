@@ -38,6 +38,10 @@ site:
             label: Datace
             type: select
             url: "/obdobi/{slug}.html"    # explicitní URL šablona (nepovinná)
+          q:                              # volitelně: fulltextové vyhledávání
+            label: Hledat
+            type: text
+            search_fields: [nazev, pribeh, umisteni]
 ```
 
 ## Klíče
@@ -67,10 +71,11 @@ Pro každou dimenzi:
 | Klíč | Typ | Popis |
 |---|---|---|
 | `label` | string | Zobrazovaný název (např. „Typ", „Štítek") |
-| `type` | `select` \| `multiselect` | UI hint |
-| `many` | bool | `true` pokud sloupec obsahuje JSON pole hodnot (jako tagy) |
-| `url` | string | URL šablona s `{slug}` placeholderem pro `href` pill/checkbox elementu (viz níže) |
-| `sort` | string | Pořadí hodnot v seznamu — preset (`count` \| `alpha`) nebo explicitní multi-column (`-count,alpha`); viz [Sortování](#sortování) |
+| `type` | `select` \| `multiselect` \| `text` | Widget typ |
+| `many` | bool | `true` pokud sloupec obsahuje JSON pole hodnot (jako tagy) — jen pro select/multiselect |
+| `url` | string | URL šablona s `{slug}` placeholderem pro `href` pill/checkbox elementu (viz níže) — jen pro select/multiselect |
+| `sort` | string | Pořadí hodnot v seznamu — preset (`count` \| `alpha`) nebo explicitní multi-column (`-count,alpha`); viz [Sortování](#sortování) — jen pro select/multiselect |
+| `search_fields` | list | **Text dim only:** seznam polí záznamu, ve kterých se hledá dotaz. Viz [Fulltextové hledání](#fulltextové-hledání). |
 
 #### `type: select` vs `multiselect`
 
@@ -178,6 +183,61 @@ pages:
         typ: {label: Typ, type: select}                        # url = /kategorie/{slug}.html
         stitky: {label: Štítek, type: multiselect, many: true} # url = /stitek/{slug}.html
 ```
+
+## Fulltextové hledání
+
+Dimenze s `type: text` funguje jako fulltextový filtr — uživatel do inputu píše dotaz a záznamy se filtrují podle toho, jestli některé z polí uvedených v `search_fields` obsahuje daný podřetězec.
+
+```yaml
+filters:
+  fields: [slug, nazev, pribeh, umisteni, typ, typ_slug, ...]
+  dimensions:
+    q:
+      label: Hledat
+      type: text
+      search_fields: [nazev, pribeh, umisteni]
+```
+
+**Chování:**
+
+- **Case-insensitive** — velká/malá písmena nevadí
+- **Diakritika-agnostic** — normalize NFKD + strip combining chars. „kriz" najde „kříž", „kříž" najde „kriz"
+- **Substring match** — „kap" najde jak „kaple", tak „kaplička", tak „kaplí"
+- **AND s ostatními dimenzemi** — text filter platí souběžně s ostatními filtry
+- **Debounce 200 ms** — filtr se aplikuje 200 ms po posledním stisku klávesy (plynulé psaní bez lagu)
+- **URL state** — dotaz jde do `?q=xxx` v URL params (bez comma-splittingu, takže dotaz může obsahovat čárku)
+
+**Fields v `search_fields`:**
+
+Musí být pole, která jsou zároveň v `filters.fields` — bez toho by nebyly v filter JSONu a JS by je neviděl.
+
+**Čeho se text dim neúčastní:**
+
+- **Facety** — nemá diskrétní hodnoty k počítání
+- **Sortování** — nemá volby k řazení
+- **URL auto-detekce** — nemá žádný `url` template
+
+**Widget** je `<input type="search">` s `data-filter-text-dimension` atributem. Podrobnosti viz [widgets.md](widgets.md#text-widget).
+
+### Limitace a možná budoucí vylepšení
+
+Aktuální řešení používá **naivní NFKD-normalizovaný substring match** — cca 20 řádků JS bez závislostí. Pro projekty s několika stovkami až tisíci záznamy a 3–5 hledatelnými poli je to naprosto dostačující: filtrování jednoho keystroke trvá pod 5 ms.
+
+**Kdy to nemusí stačit:**
+
+- **Slovní tvary (stemming)** — „kříž" nenajde záznamy, které obsahují jen „kříže", „kříži", „křížem". Uživatel to obvykle obchází zadáním prefixu („kříž" pak funguje pro všechny tvary), ale u některých dotazů to selže.
+- **Překlepy** — „krzz" nenajde „kříž"
+- **Ranking podle relevance** — všechny výsledky jsou vypsány rovnocenně, nejsou seřazené podle „kolik shod v jakém poli". Pro filter list to obvykle nevadí, ale u velkých výsledků by šlo pomoci.
+- **Velmi velké datasety (10 000+ záznamů)** — naivní scan celého pole se stává znatelný
+
+**Cesty k vylepšení, kdy naivní přístup nestačí:**
+
+1. **[MiniSearch](https://github.com/lucaong/minisearch)** (~7 KB gzip) — přidá tokenizaci, prefix search, fuzzy match a základní ranking. Custom `processTerm` hook umožní zapojit stejnou NFKD normalizaci. Rozumný upgrade path.
+2. **[FlexSearch](https://github.com/nextapps-de/flexsearch)** (~10 KB gzip) — nejrychlejší v pure JS. Encoders per jazyk, ale bez native podpory češtiny.
+3. **[Fuse.js](https://fusejs.io/)** (~14 KB gzip) — silné fuzzy match / tolerance překlepů, weighted fields, žádný stemmer.
+4. **Custom Czech stemmer** — pro věrné „kříž nejde jen kříž ale i kříže" chování. Bez existující lightweight knihovny pro češtinu; buď custom rule set (100–200 řádků) nebo importovat něco jako `czech-stemmer-hp`.
+
+Doporučená cesta: **začni s naivní implementací**. Když uživatelé opakovaně nevidí očekávané výsledky, zvaž MiniSearch — v pluginu je jasně vyčleněná funkce `matchesText` v `filters.js`, nahradit ji indexovaným lookup je otázka ~30 řádků.
 
 ## Facets (dynamické počty a skrývání)
 

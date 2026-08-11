@@ -145,6 +145,27 @@ document.addEventListener("krizky-filters:update", (e) => {
 });
 ```
 
+## Text dim (fulltextové hledání)
+
+`type: text` dimenze je speciální případ. Chování:
+
+- **State**: `state.get(dim)` = `Set([queryString])` — jednoprvková množina drží dotaz jako string (pro konzistenci se zbytkem architektury)
+- **URL**: `?q=xxx` bez comma-splittingu (query může obsahovat čárku, plugin ji nerozsekne)
+- **Filter logika**: `normalizeText(record[field]).includes(normalizeText(query))` pro každé pole v `searchFields`
+- **Normalizace**: `String.normalize("NFKD")` + strip combining chars → diakritika-agnostic, case-insensitive
+- **Debounce**: 200 ms (konstanta `TEXT_DEBOUNCE_MS`)
+- **Neúčastní se**: facet compute, DOM reorder, `updateFilterStates`
+
+**Data-atribut hooks pro text dim:**
+
+| Atribut | Chování |
+|---|---|
+| `[data-filter-text-dimension="dim"]` | Input element — JS připne `input` listener s debouncem, čte `input.value` |
+
+Sync z URL do inputu funguje automaticky (`syncTextInputs` volané z `filterAndRender`). Aktivní element (focused) se neaktualizuje, aby uživatelův typing nebyl přerušen.
+
+**Vlastní text widget** může být cokoliv — `<input>`, `<textarea>`, dokonce více inputů s různými dimenzemi. Musí mít `data-filter-text-dimension` a číst jeho hodnotu přes property `.value`.
+
 ## `#filter-config` script tag
 
 Plugin injektuje do stránky JSON s konfigurací filtru:

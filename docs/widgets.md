@@ -78,6 +78,43 @@ To je vše. JS:
 
 Widget může být cokoliv: pilulka, checkbox, combobox item, slider option, radio input — hlavně ať má výše zmíněné atributy.
 
+## Text widget
+
+Pro `type: text` (fulltextové hledání) plugin dodává default `_filter_widget_text.html` — jednoduchý `<input type="search">` s data-atributem. Kontrakt widgetu:
+
+```html
+<input type="search"
+       data-filter-text-dimension="{dim_key}"
+       placeholder="{label}">
+```
+
+JS napojí `input` event s debounce 200 ms, aktualizuje state a URL. Widget nemá dropdown, seznam ani `[data-filter-value]` elementy.
+
+**Přizpůsobení:**
+
+- Přebij `_filter_widget_text.html` ve svém `templates/` a přidej CSS třídy / prvky dle designu
+- Text dim nepotřebuje být uvnitř comboboxu — když máš dispatcher `_filter_widget.html`, který wrapuje ostatní dimenze do combobox struktury, pro text branch větev:
+
+```jinja2
+{% for _dim_key, _dim in _dims.items() if not _dim_key.startswith('_') %}
+  {% if _dim.type == "text" %}
+    {% include "_filter_widget_text.html" %}
+  {% else %}
+    <div class="fbar-dim" data-combobox ...>
+      {% include "_filter_widget_" ~ _dim.type ~ ".html" %}
+    </div>
+  {% endif %}
+{% endfor %}
+```
+
+**Kontext v šabloně** (parciální `_filter_widget_text.html`):
+
+| Proměnná | Popis |
+|---|---|
+| `_dim_key` | Název dimenze — MUSÍ jít do `data-filter-text-dimension` |
+| `_dim.label` | Text pro placeholder / aria-label |
+| `_dim["values"]` | Prázdný list (text dim nemá diskrétní hodnoty) |
+
 ## Combobox pattern
 
 Combobox (dropdown s vyhledáváním) není součástí pluginu, protože jeho open/close/search logika je čistě UI záležitost projektu. Plugin ale dodává **event `krizky-filters:update`**, který combobox JS potřebuje pro aktualizaci trigger tlačítka.

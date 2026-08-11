@@ -7,6 +7,7 @@ Bez JavaScriptu zůstává web plně funkční — pill-tlačítka jsou obyčejn
 ## Klíčové vlastnosti
 
 - **AND mezi dimenzemi, OR uvnitř dimenze** — kombinace více dimenzí (typ AND datace AND štítek) a více hodnot v rámci dimenze (baroko OR hřbitov)
+- **Fulltextové hledání** — `type: text` dimenze s NFKD-normalizovaným substring matchem (diakritika-agnostic, case-insensitive)
 - **Facety** (volitelné) — dynamicky přepočítávané počty a skrývání/graying nedostupných hodnot podle aktuálního výběru
 - **Konfigurovatelné řazení** — `count` (populární nahoře), `alpha` (abecedně) nebo multi-column syntax (`-count,alpha`)
 - **URL state** — číslo stránky v cestě (`/mista-2.html`), filtry v query params (`?typ=kriz&stitky=baroko`), funguje back/forward, bookmarking, sdílení odkazů

@@ -310,6 +310,55 @@ def test_build_filter_config_sort_propagated(minimal_config):
     assert cfg["dimensions"]["datace"]["sort"] == "count"
 
 
+def test_build_filter_config_text_dim(minimal_config):
+    """Text dim exposes searchFields, no sort/many."""
+    page_cfg = dict(minimal_config["site"]["pages"]["vsechna_mista"])
+    page_cfg["filters"] = {
+        "dimensions": {
+            "q": {
+                "label": "Hledat",
+                "type": "text",
+                "search_fields": ["nazev", "pribeh"],
+            },
+        },
+    }
+    cfg = _build_filter_config(page_cfg, minimal_config)
+    q = cfg["dimensions"]["q"]
+    assert q["type"] == "text"
+    assert q["searchFields"] == ["nazev", "pribeh"]
+    assert "sort" not in q
+    assert "many" not in q
+
+
+def test_extra_template_vars_text_dim(conn):
+    """Text dims get empty values list and no DB query."""
+    config = {
+        "sources": {"tables": {"mista": {"main": True}}},
+        "site": {
+            "pages": {
+                "search_page": {
+                    "path": "/mista.html",
+                    "filters": {
+                        "dimensions": {
+                            "q": {
+                                "label": "Hledat",
+                                "type": "text",
+                                "search_fields": ["nazev"],
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+    p = FilterPlugin()
+    result = p.extra_template_vars(config=config, config_dir=Path("."), conn=conn)
+    q_dim = result["page_filters"]["search_page"]["q"]
+    assert q_dim["type"] == "text"
+    assert q_dim["label"] == "Hledat"
+    assert q_dim["values"] == []
+
+
 # ── plugin.py — _resolve_url_template ────────────────────────────────────────
 
 
