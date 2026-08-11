@@ -128,6 +128,31 @@ sort: "count"            # count ASC (bez `-` prefixu)
 
 > Kvůli YAML doporučuji hodnotu s `-` prefixem citovat (`"-count"` místo `-count`), byť oba tvary fungují.
 
+### Explicitní pořadí
+
+Pro případy, kdy pořadí nelze odvodit ze standardních polí (count / alpha) — např. chronologické období, priority-based enum:
+
+```yaml
+dimensions:
+  datace:
+    label: Období
+    type: select
+    sort:
+      order:
+        - "1. polovina 19. století"
+        - "2. polovina 19. století"
+        - "1. polovina 20. století"
+        - "2. polovina 20. století"
+      fallback: "count"    # volitelné, default: "count"
+```
+
+- Hodnoty ze `order` seznamu jdou v tomto pořadí
+- Hodnoty **mimo seznam** padnou nakonec a řadí se dle `fallback` (přijímá stejné hodnoty jako string sort — preset alias nebo multi-column)
+- Vhodné pro dimenze s malou známou množinou hodnot (≤ 20)
+- Pro dynamické dimenze (kde value může přibýt / se změnit) hlídá `fallback`, kam nové hodnoty padnou
+
+**Chování při JS re-sortu s facety:** to samé — pořadí se aplikuje i client-side, plugin JS zná `order` z filter config JSONu.
+
 ### Per-dimenze
 
 Různé dimenze mohou mít různé strategie:

@@ -59,15 +59,37 @@ def _field_key(v: dict, field: str):
     return v["value"]
 
 
-def _sort_values(values: list[dict], sort_spec: str) -> None:
-    """Sort ``values`` in-place per ``sort_spec``.
-
-    Uses Python's stable sort: iterate the parsed fields from least-significant
-    to most-significant, so the final order respects the declared priority.
-    """
+def _sort_by_columns(values: list[dict], sort_spec: str) -> None:
+    """Sort in-place by string spec (preset alias or explicit multi-column)."""
     parsed = _parse_sort(sort_spec)
     for field, desc in reversed(parsed):
         values.sort(key=lambda v, f=field: _field_key(v, f), reverse=desc)
+
+
+def _sort_values(values: list[dict], sort_spec) -> None:
+    """Sort ``values`` in-place per ``sort_spec``.
+
+    Accepts:
+      - String: preset alias (``count`` | ``alpha``) or explicit multi-column
+        (``-count,alpha``). Uses stable sort with least-significant key first.
+      - Dict with ``order`` key: values matching the list appear in that order;
+        remaining values fall back to sort by ``fallback`` spec (default: ``count``).
+    """
+    if isinstance(sort_spec, dict) and "order" in sort_spec:
+        order_list = sort_spec["order"] or []
+        fallback_spec = sort_spec.get("fallback", "count")
+        order_map = {v: i for i, v in enumerate(order_list)}
+
+        in_order = [v for v in values if v["value"] in order_map]
+        rest = [v for v in values if v["value"] not in order_map]
+
+        in_order.sort(key=lambda v: order_map[v["value"]])
+        _sort_by_columns(rest, fallback_spec)
+
+        values[:] = in_order + rest
+        return
+
+    _sort_by_columns(values, sort_spec or "count")
 
 
 def _fetch_value_counts(

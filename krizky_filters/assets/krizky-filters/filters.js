@@ -276,6 +276,31 @@
     return (text || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
   }
 
+  // Stable multi-column sort by string spec (mirrors Python _sort_by_columns).
+  function sortWrappedByColumns(wrapped, spec) {
+    const parsed = parseSort(spec);
+    if (parsed.length === 0) return;
+    for (const [field, desc] of [...parsed].reverse()) {
+      wrapped.sort((a, b) => {
+        const va = field === "count" ? a.count : a.alphaKey;
+        const vb = field === "count" ? b.count : b.alphaKey;
+        if (va < vb) return desc ? 1 : -1;
+        if (va > vb) return desc ? -1 : 1;
+        return 0;
+      });
+    }
+  }
+
+  // Sort wrapped items by explicit label order; unmatched items sort by fallback.
+  function sortWrappedByOrder(wrapped, orderList, fallback) {
+    const orderMap = new Map(orderList.map((v, i) => [v, i]));
+    const inOrder = wrapped.filter((w) => orderMap.has(w.label));
+    const rest = wrapped.filter((w) => !orderMap.has(w.label));
+    inOrder.sort((a, b) => orderMap.get(a.label) - orderMap.get(b.label));
+    sortWrappedByColumns(rest, fallback || "count");
+    return [...inOrder, ...rest];
+  }
+
   // Re-order [data-filter-value] elements per dimension based on their current
   // facet counts + display label. Called after applyFacets to sync DOM with
   // dynamic counts.
@@ -290,27 +315,21 @@
     for (const [dim, items] of groups) {
       const dimCfg = dimensions[dim];
       if (!dimCfg) continue;
-      const parsed = parseSort(dimCfg.sort);
-      if (parsed.length === 0) continue;
+      const spec = dimCfg.sort;
 
-      const wrapped = items.map((el) => {
+      let wrapped = items.map((el) => {
         const wrap = el.closest("[data-combobox-option]") || el;
         const countEl = el.querySelector("[data-facet-count]");
         const count = countEl ? (parseInt(countEl.textContent, 10) || 0) : 0;
         const labelEl = el.querySelector(".fbar-item-label");
-        const label = labelEl ? labelEl.textContent : el.textContent;
-        return { wrap, count, alphaKey: sortKeyAlpha(label) };
+        const label = (labelEl ? labelEl.textContent : el.textContent).trim();
+        return { wrap, count, label, alphaKey: sortKeyAlpha(label) };
       });
 
-      // Stable sort: apply least-significant key first.
-      for (const [field, desc] of [...parsed].reverse()) {
-        wrapped.sort((a, b) => {
-          const va = field === "count" ? a.count : a.alphaKey;
-          const vb = field === "count" ? b.count : b.alphaKey;
-          if (va < vb) return desc ? 1 : -1;
-          if (va > vb) return desc ? -1 : 1;
-          return 0;
-        });
+      if (spec && typeof spec === "object" && Array.isArray(spec.order)) {
+        wrapped = sortWrappedByOrder(wrapped, spec.order, spec.fallback);
+      } else {
+        sortWrappedByColumns(wrapped, spec);
       }
 
       const parent = wrapped.length > 0 ? wrapped[0].wrap.parentNode : null;

@@ -198,6 +198,70 @@ def test_fetch_filter_values_sort_invalid_field(conn):
                             {"label": "T", "type": "select", "sort": "banana"})
 
 
+def test_fetch_filter_values_sort_explicit_order():
+    """sort: {order: [...]} places listed values first in that order."""
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    c.execute("CREATE TABLE t (val TEXT, val_slug TEXT)")
+    c.executemany("INSERT INTO t VALUES (?, ?)", [
+        ("2. polovina 19. století", "2-19"),
+        ("1. polovina 20. století", "1-20"),
+        ("1. polovina 19. století", "1-19"),
+        ("2. polovina 20. století", "2-20"),
+    ])
+    c.commit()
+    values = fetch_filter_values(
+        c, "t", "val",
+        {"label": "V", "type": "select", "sort": {"order": [
+            "1. polovina 19. století",
+            "2. polovina 19. století",
+            "1. polovina 20. století",
+            "2. polovina 20. století",
+        ]}},
+    )
+    assert [v["value"] for v in values] == [
+        "1. polovina 19. století",
+        "2. polovina 19. století",
+        "1. polovina 20. století",
+        "2. polovina 20. století",
+    ]
+    c.close()
+
+
+def test_fetch_filter_values_sort_order_with_extras():
+    """Values not in order list go to end, sorted by fallback."""
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    c.execute("CREATE TABLE t (val TEXT, val_slug TEXT)")
+    c.executemany("INSERT INTO t VALUES (?, ?)", [
+        ("baroko", "baroko"),
+        ("gotika", "gotika"),
+        ("renesance", "renesance"),   # not in order
+        ("empír", "empir"),           # not in order
+    ])
+    c.commit()
+    values = fetch_filter_values(
+        c, "t", "val",
+        {"label": "V", "type": "select", "sort": {
+            "order": ["gotika", "baroko"],
+            "fallback": "alpha",   # rest alphabetically
+        }},
+    )
+    slugs = [v["slug"] for v in values]
+    # gotika, baroko (in order) → empir, renesance (alpha for rest)
+    assert slugs == ["gotika", "baroko", "empir", "renesance"]
+    c.close()
+
+
+def test_fetch_filter_values_sort_order_empty_list(conn):
+    """Empty order list falls back to fallback spec."""
+    values = fetch_filter_values(
+        conn, "mista", "typ",
+        {"label": "T", "type": "select", "sort": {"order": [], "fallback": "alpha"}},
+    )
+    assert [v["slug"] for v in values] == ["kriz", "socha"]
+
+
 # ── json_gen.py ───────────────────────────────────────────────────────────────
 
 
