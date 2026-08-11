@@ -451,8 +451,9 @@
         } else if ("fieldItemClass" in el.dataset) {
           // Array field: data-field-item-class declares this element expects a list.
           // Treat non-array values (null, string) as empty to avoid showing stale
-          // template content from the first record.
-          const arr = Array.isArray(val) ? val : [];
+          // template content from the first record. Skip null/empty items.
+          const arr = (Array.isArray(val) ? val : [])
+            .filter((v) => v != null && String(v).trim() !== "");
           const itemClass = el.dataset.fieldItemClass || "";
           el.innerHTML = arr
             .map((v) => `<span class="${itemClass}">${escapeHtml(String(v))}</span>`)
