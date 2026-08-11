@@ -1,6 +1,13 @@
-<input type="search"
-       class="filter-text"
-       data-filter-text-dimension="{{ _dim_key }}"
-       placeholder="{{ _dim.label }}"
-       aria-label="{{ _dim.label }}"
-       autocomplete="off">
+<div class="filter-text-wrap">
+  <input type="search"
+         class="filter-text"
+         data-filter-text-dimension="{{ _dim_key }}"
+         placeholder="{{ _dim.label }}"
+         aria-label="{{ _dim.label }}"
+         autocomplete="off">
+  <button type="button"
+          class="filter-text-clear"
+          data-filter-clear-dim="{{ _dim_key }}"
+          aria-label="Vymazat {{ _dim.label }}"
+          hidden>&#x2715;</button>
+</div>

@@ -693,6 +693,8 @@
       if (!dimensions[dim] || dimensions[dim].type !== "text") return;
       let timer = null;
       input.addEventListener("input", () => {
+        // Immediate feedback for × button visibility (before debounce).
+        updateTextClearVisibility(input);
         clearTimeout(timer);
         timer = setTimeout(() => {
           const q = input.value.trim();
@@ -706,6 +708,7 @@
           filterAndRender();
         }, TEXT_DEBOUNCE_MS);
       });
+      updateTextClearVisibility(input);
     });
   }
 
@@ -719,6 +722,18 @@
       if (document.activeElement !== input && input.value !== val) {
         input.value = val;
       }
+      updateTextClearVisibility(input);
     });
+  }
+
+  // Toggle visibility of [data-filter-clear-dim] buttons associated with a
+  // text input — visible only when the input has a non-empty value.
+  function updateTextClearVisibility(input) {
+    const dim = input.dataset.filterTextDimension;
+    if (!dim) return;
+    const hasValue = input.value.trim() !== "";
+    document.querySelectorAll(
+      `[data-filter-clear-dim="${CSS.escape(dim)}"]`
+    ).forEach((btn) => { btn.hidden = !hasValue; });
   }
 })();
