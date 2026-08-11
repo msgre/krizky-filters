@@ -11,6 +11,7 @@ document.dispatchEvent(new CustomEvent("krizky-filters:update", {
   detail: {
     filtered: 61,               // počet záznamů po aplikaci filtrů
     total: 537,                 // celkový počet záznamů
+    filteredRecords: [ ... ],   // aktuálně filtrované záznamy (reference, ne kopie)
     activeState: {              // aktivní filtry po dimenzích
       typ: ["kriz"],
       stitky: ["baroko", "hrbitov"]
@@ -22,6 +23,8 @@ document.dispatchEvent(new CustomEvent("krizky-filters:update", {
   }
 }));
 ```
+
+**`filteredRecords`** obsahuje reference na skutečné záznamy z filter JSONu — ne kopie, ne serializované data. Ostatní pluginy mohou pole procházet a použít libovolná pole záznamu (`slug`, `id_radku`, atd.).
 
 **Když to zapadá:**
 
@@ -48,6 +51,43 @@ document.addEventListener("krizky-filters:update", (e) => {
 ```
 
 Event se vysílá **po** interním překreslení karet a stránkování — DOM je v tu chvíli konzistentní se `state`.
+
+## Integrace s jinými plugins (např. mapa)
+
+`krizky-filters:update` je stabilní API pro cross-plugin komunikaci. Jakýkoliv další plugin (mapa, analytics, custom counter, export atd.) se může připojit bez přímé závislosti na krizky-filters.
+
+**Příklad — mapový plugin aktualizuje pins podle filtrů:**
+
+```javascript
+// Mapový plugin má vlastní JSON s coordinaty
+const mapPins = new Map();  // slug → { marker, coords }
+allMapRecords.forEach(r => {
+  mapPins.set(r.slug, { marker: createMarker(r.lat, r.lng), coords: [r.lat, r.lng] });
+});
+
+// Reagovat na změnu filtru
+document.addEventListener("krizky-filters:update", (e) => {
+  const visibleSlugs = new Set(e.detail.filteredRecords.map(r => r.slug));
+  for (const [slug, pin] of mapPins) {
+    if (visibleSlugs.has(slug)) {
+      pin.marker.addTo(map);
+    } else {
+      pin.marker.remove();
+    }
+  }
+});
+```
+
+**Design principy:**
+
+- Ostatní pluginy si drží vlastní data (mapa má coords, filtr má filter data) — decoupling
+- Klíčem pro matching je `slug` nebo `id_radku` (co je jednoznačné v obou datasetech)
+- Event vysílá i při inicializaci — plugin nemusí ručně inicializovat, stačí přidat listener
+- `filteredRecords` je JS array reference — žádná serializace, žádné kopírování
+
+**Rozšiřovatelnost:**
+
+Když by v budoucnu potřeboval další plugin komunikovat opačným směrem (map → filter, např. „klikni na region a filtruj podle něj"), lze zavést vlastní event (např. `krizky-map:region-click`), který filter plugin bude odchytávat. Filter plugin ale aktuálně `on-<event>` API neposkytuje — cesta by byla přidat i tento směr, pokud to bude potřeba.
 
 ## URL state
 

@@ -394,13 +394,16 @@
     renderCards(pageRecords);
     renderPagination(currentPage, totalPages);
 
-    // Notify other scripts (e.g. custom widgets) about the updated filter state.
+    // Notify other scripts (e.g. custom widgets, map plugin) about the update.
+    // `filteredRecords` gives references (no copy), so other plugins can react
+    // to filter changes without re-implementing the matcher.
     document.dispatchEvent(new CustomEvent("krizky-filters:update", {
       detail: {
-        filtered: filtered.length,
-        total: allRecords.length,
+        filtered: filtered.length,        // count (subset)
+        total: allRecords.length,         // count (full dataset)
+        filteredRecords: filtered,        // actual records that matched
         activeState: Object.fromEntries([...state].map(([k, v]) => [k, [...v]])),
-        facets: facets,  // null when facets disabled
+        facets: facets,                   // null when facets disabled
       },
     }));
   }
