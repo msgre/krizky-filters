@@ -500,6 +500,9 @@
         const paddedId = String(rowId).padStart(pad, "0");
         el.src = `${config.photosBaseUrl}/${paddedId}_${size}.${fmt}`;
         el.hidden = false;
+        // Apply focal point if krizky-photos exposed one for this photo.
+        const focal = window.krizkyPhotos?.focalPoints?.[paddedId];
+        if (focal) el.style.objectPosition = focal;
         el.onload = () => {
           const thumb = el.closest("[data-thumb]");
           if (thumb) thumb.classList.remove("placeholder");

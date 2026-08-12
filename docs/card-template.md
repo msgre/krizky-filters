@@ -111,6 +111,7 @@ JS:
 - Sestaví URL: `{photosBaseUrl}/{padded_id}_{size}.{format}` (např. `https://cdn.example.com/007_thumb.jpg`)
 - Nastaví `el.src` a připne `onload` (odebere `.placeholder` z parent `[data-thumb]`) a `onerror` (schová `<img>`)
 - Když ID chybí nebo `photosBaseUrl` není nastaven, element skryje
+- Pokud je nainstalován plugin `krizky-photos` a pro dané ID existuje záznam ve `window.krizkyPhotos.focalPoints`, nastaví na elementu `style.objectPosition` — obrázek zůstane vycentrovaný na stejný bod jako v SSR verzi (např. hlavy postav)
 
 Pattern pro placeholder chování:
 
