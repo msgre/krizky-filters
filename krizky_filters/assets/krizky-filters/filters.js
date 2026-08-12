@@ -443,11 +443,16 @@
         const field = el.dataset.field;
         const val = record[field] ?? "";
 
-        if (el.tagName === "IMG") {
+        if (el.dataset.hrefPattern) {
+          // Any element with data-href-pattern (SVG <use>, <a>, etc.):
+          // fill href attribute from template.
+          const href = el.dataset.hrefPattern.replace("{value}", String(val));
+          if (el.tagName === "A") el.href = href;
+          else el.setAttribute("href", href);
+        } else if (el.tagName === "IMG") {
           el.src = String(val);
         } else if (el.tagName === "A") {
-          const pattern = el.dataset.hrefPattern;
-          el.href = pattern ? pattern.replace("{value}", String(val)) : String(val);
+          el.href = String(val);
         } else if ("fieldItemClass" in el.dataset) {
           // Array field: data-field-item-class declares this element expects a list.
           // Treat non-array values (null, string) as empty to avoid showing stale
@@ -472,6 +477,16 @@
           el.textContent = String(val);
         }
       });
+      // data-hide-if-empty: hide element when the referenced record field is empty
+      clone.querySelectorAll("[data-hide-if-empty]").forEach((el) => {
+        const field = el.dataset.hideIfEmpty;
+        const val = record[field];
+        const empty = val == null
+          || (typeof val === "string" && val.trim() === "")
+          || (Array.isArray(val) && val.length === 0);
+        el.hidden = empty;
+      });
+
       // data-field-photo: construct photo URL from row ID + size + format
       clone.querySelectorAll("[data-field-photo]").forEach((el) => {
         const rowId = record[el.dataset.fieldPhoto];
