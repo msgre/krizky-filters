@@ -34,8 +34,8 @@
   }
 
   const { jsonUrl, basePath, pageSize, gridSelector, dimensions } = config;
-  const paginationWindow = config.window ?? 2;
-  const paginationBoundary = config.boundary ?? 1;
+  const paginationWindow = config.paginationWindow ?? 2;
+  const paginationBoundary = config.paginationBoundary ?? 1;
   const facetsEnabled = config.facets === true;
   const facetsMode = config.facetsMode || "hide";  // "hide" | "disable"
   const grid = document.querySelector(gridSelector);
