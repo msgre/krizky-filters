@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from krizky_filters.json_gen import generate_filter_json
-from krizky_filters.plugin import FilterPlugin, _build_filter_config, _resolve_url_template
+from krizky_filters.plugin import FiltersPlugin, _build_filter_config, _resolve_url_template
 from krizky_filters.values import fetch_filter_values
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -451,7 +451,7 @@ def test_extra_template_vars_text_dim(conn):
             },
         },
     }
-    p = FilterPlugin()
+    p = FiltersPlugin()
     result = p.extra_template_vars(config=config, config_dir=Path("."), conn=conn)
     q_dim = result["page_filters"]["search_page"]["q"]
     assert q_dim["type"] == "text"
@@ -515,7 +515,7 @@ def test_resolve_url_template_no_match():
 
 
 def test_inject_head_with_filters(minimal_config):
-    p = FilterPlugin()
+    p = FiltersPlugin()
     page_cfg = minimal_config["site"]["pages"]["vsechna_mista"]
     result = p.inject_head(page_cfg=page_cfg, config=minimal_config)
     assert result is not None
@@ -524,13 +524,13 @@ def test_inject_head_with_filters(minimal_config):
 
 
 def test_inject_head_without_filters(minimal_config):
-    p = FilterPlugin()
+    p = FiltersPlugin()
     result = p.inject_head(page_cfg={"path": "/index.html"}, config=minimal_config)
     assert result is None
 
 
 def test_inject_body_end_with_filters(minimal_config):
-    p = FilterPlugin()
+    p = FiltersPlugin()
     page_cfg = minimal_config["site"]["pages"]["vsechna_mista"]
     result = p.inject_body_end(page_cfg=page_cfg, config=minimal_config)
     assert result is not None
@@ -544,7 +544,7 @@ def test_inject_body_end_with_filters(minimal_config):
 
 
 def test_inject_body_end_without_filters(minimal_config):
-    p = FilterPlugin()
+    p = FiltersPlugin()
     result = p.inject_body_end(page_cfg={"path": "/index.html"}, config=minimal_config)
     assert result is None
 
@@ -553,7 +553,7 @@ def test_inject_body_end_without_filters(minimal_config):
 
 
 def test_extra_template_vars_structure(conn, minimal_config):
-    p = FilterPlugin()
+    p = FiltersPlugin()
     result = p.extra_template_vars(config=minimal_config, config_dir=Path("."), conn=conn)
     assert "page_filters" in result
     pf = result["page_filters"]
@@ -566,7 +566,7 @@ def test_extra_template_vars_structure(conn, minimal_config):
 
 
 def test_extra_template_vars_card_template(conn, minimal_config):
-    p = FilterPlugin()
+    p = FiltersPlugin()
     result = p.extra_template_vars(config=minimal_config, config_dir=Path("."), conn=conn)
     assert result["page_filters"]["vsechna_mista"]["_card_template"] == "_karta.html"
 
@@ -589,7 +589,7 @@ def test_extra_template_vars_skips_non_filter_pages(conn):
             }
         },
     }
-    p = FilterPlugin()
+    p = FiltersPlugin()
     result = p.extra_template_vars(config=config, config_dir=Path("."), conn=conn)
     assert "home" not in result["page_filters"]
     assert "filter_page" in result["page_filters"]
@@ -600,7 +600,7 @@ def test_extra_template_vars_no_filter_pages(conn):
         "sources": {"tables": {"mista": {"main": True}}},
         "site": {"pages": {"home": {"path": "/index.html", "template": "index.html"}}},
     }
-    p = FilterPlugin()
+    p = FiltersPlugin()
     result = p.extra_template_vars(config=config, config_dir=Path("."), conn=conn)
     assert result["page_filters"] == {}
 
@@ -624,7 +624,7 @@ def test_extra_template_vars_auto_detects_url(conn):
             },
         },
     }
-    p = FilterPlugin()
+    p = FiltersPlugin()
     result = p.extra_template_vars(config=config, config_dir=Path("."), conn=conn)
     values = result["page_filters"]["filter_page"]["typ"]["values"]
     # Every fetched value should have URL derived from the category page's path.
@@ -637,7 +637,7 @@ def test_extra_template_vars_auto_detects_url(conn):
 
 
 def test_after_page_written_copies_assets(tmp_path, minimal_config):
-    p = FilterPlugin()
+    p = FiltersPlugin()
     page_cfg = minimal_config["site"]["pages"]["vsechna_mista"]
     p.after_page_written(
         page_cfg=page_cfg,
@@ -651,7 +651,7 @@ def test_after_page_written_copies_assets(tmp_path, minimal_config):
 
 
 def test_after_page_written_idempotent(tmp_path, minimal_config):
-    p = FilterPlugin()
+    p = FiltersPlugin()
     page_cfg = minimal_config["site"]["pages"]["vsechna_mista"]
     # Call twice — must not raise
     p.after_page_written(
@@ -672,7 +672,7 @@ def test_after_page_written_idempotent(tmp_path, minimal_config):
 
 
 def test_after_page_written_generates_json(tmp_path, minimal_config):
-    p = FilterPlugin()
+    p = FiltersPlugin()
     page_cfg = minimal_config["site"]["pages"]["vsechna_mista"]
     records = [{"slug": "a", "nazev": "A", "typ": "kriz"}]
     p.after_page_written(
@@ -690,7 +690,7 @@ def test_after_page_written_generates_json(tmp_path, minimal_config):
 
 
 def test_after_page_written_skips_no_filters(tmp_path, minimal_config):
-    p = FilterPlugin()
+    p = FiltersPlugin()
     p.after_page_written(
         page_cfg={"path": "/index.html"},
         html_path="/index.html",
