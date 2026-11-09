@@ -2,13 +2,13 @@
 id: "01"
 slug: rename-filters-plugin
 title: Přejmenovat FilterPlugin na FiltersPlugin
-status: pending
+status: blocked
 depends_on: []
 files:
   - krizky_filters/plugin.py
   - tests/test_filter_plugin.py
-attempts: 0
-pr: ""
+attempts: 1
+pr: "2"
 ---
 
 ## Cíl
@@ -31,3 +31,10 @@ Jméno třídy pluginu má odpovídat balíčku `krizky_filters`, stejně jako u
 - Ticket 02 na tomhle přejmenování staví (nové testy budou používat `FiltersPlugin`).
 
 ## Otázky
+Sloučení PR #2 selhalo: Spuštěno `cd /Users/msgre/projects/muzeum/krizky && swarm-merge 2`, exit kód 6. Výpis skriptu:
+GraphQL: Could not resolve to a PullRequest with the number of 2. (repository.pullRequest)
+gh pr view 2 selhal
+
+PR #2 se nepodařilo najít v repozitáři. Tiket 01 nebyl označen jako hotový, soubor tiketu ani větve jsem neměnil a nic jsem nepushnul.
+
+Odpověď:
