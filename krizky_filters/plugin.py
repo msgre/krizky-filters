@@ -5,9 +5,9 @@ import shutil
 from pathlib import Path, PurePosixPath
 
 from jinja2 import ChoiceLoader, FileSystemLoader
-
 from krizky.hooks import hookimpl
 from krizky.render import render_config_str
+
 from krizky_filters.json_gen import generate_filter_json
 from krizky_filters.values import fetch_filter_values
 
@@ -22,8 +22,7 @@ def _get_main_table(config: dict) -> str:
 
 def _iter_dimensions(filters_cfg: dict):
     """Yield (dim_key, dim_cfg) from filters.dimensions."""
-    for key, val in filters_cfg.get("dimensions", {}).items():
-        yield key, val
+    yield from filters_cfg.get("dimensions", {}).items()
 
 
 def _resolve_url_template(config: dict, dim_key: str, dim_cfg: dict) -> str:
@@ -81,8 +80,8 @@ def _build_filter_config(page_cfg: dict, config: dict) -> dict:
         "photosBaseUrl": photos_base_url,
         "pageSize": page_cfg.get("paginate_by") or site_cfg.get("paginate_by") or 0,
         "gridSelector": "[data-filter-grid]",
-        "window": site_cfg.get("pagination_window", 2),
-        "boundary": site_cfg.get("pagination_boundary", 1),
+        "paginationWindow": site_cfg.get("pagination_window", 2),
+        "paginationBoundary": site_cfg.get("pagination_boundary", 1),
         "facets": bool(filters_cfg.get("facets", False)),
         "facetsMode": filters_cfg.get("facets_mode", "hide"),
         "dimensions": dimensions,
@@ -100,16 +99,16 @@ class FilterPlugin:
             return
         loaders = env.loader.loaders
         already = any(
-            isinstance(ldr, FileSystemLoader)
-            and str(_PLUGIN_TEMPLATES) in ldr.searchpath
+            isinstance(ldr, FileSystemLoader) and str(_PLUGIN_TEMPLATES) in ldr.searchpath
             for ldr in loaders
         )
         if not already:
             # After project templates, before built-in krizky templates.
-            env.loader.loaders = (
-                [loaders[0], FileSystemLoader(str(_PLUGIN_TEMPLATES))]
-                + loaders[1:]
-            )
+            env.loader.loaders = [
+                loaders[0],
+                FileSystemLoader(str(_PLUGIN_TEMPLATES)),
+                *loaders[1:],
+            ]
 
     @hookimpl
     def extra_template_vars(self, config, config_dir, conn):

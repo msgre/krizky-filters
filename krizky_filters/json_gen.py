@@ -20,11 +20,7 @@ def generate_filter_json(
     json_dir = output_dir / "jsons"
     json_dir.mkdir(parents=True, exist_ok=True)
 
-    data = (
-        [{k: r.get(k) for k in fields} for r in records]
-        if fields
-        else list(records)
-    )
+    data = [{k: r.get(k) for k in fields} for r in records] if fields else list(records)
 
     (json_dir / f"{stem}-filter.json").write_text(
         json.dumps(data, ensure_ascii=False, separators=(",", ":")),

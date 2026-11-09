@@ -14,8 +14,8 @@ def _sort_key_alpha(text: str) -> str:
 
 # Presets — shorthand for common multi-column sorts.
 _SORT_ALIASES = {
-    "count": "-count,alpha",   # nejčastější nahoře, abeceda jako tiebreaker
-    "alpha": "alpha",           # čistě abecedně
+    "count": "-count,alpha",  # nejčastější nahoře, abeceda jako tiebreaker
+    "alpha": "alpha",  # čistě abecedně
 }
 
 _ALLOWED_SORT_FIELDS = {"count", "alpha"}
