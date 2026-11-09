@@ -28,3 +28,9 @@ Při testech JS zkoušej jen čisté funkce přes `node --test`. Kód závislý 
 
 - Do `main` nikdy necommituj ani nepushuj. Práce jde přes větve `swarm/<heslo>` a PR.
 - Commity jsou česky, s volitelným prefixem `feat:`, `fix:` nebo `refactor:`.
+
+## Swarm
+
+- Log běhu: `/Users/msgre/projects/muzeum/krizky/work/<YYYY-MM-DD>-<NN>-<heslo>.md`. `NN` začíná každý den od `01` (podívej se, co už v adresáři je).
+- Po zapsání logu přidej řádek do tabulky „Stav fází“ v `/Users/msgre/projects/muzeum/krizky/work/OVERVIEW.md` se stavem a odkazem na log.
+- Do core repa nic necommituj. Logy a `OVERVIEW.md` tam spravuje uživatel.

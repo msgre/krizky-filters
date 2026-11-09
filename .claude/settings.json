@@ -1,6 +1,9 @@
 {
   "permissions": {
-    "additionalDirectories": ["/Users/msgre/projects/muzeum/krizky/docs/guidelines"],
+    "additionalDirectories": [
+      "/Users/msgre/projects/muzeum/krizky/docs/guidelines",
+      "/Users/msgre/projects/muzeum/krizky/work"
+    ],
     "allow": [
       "Bash(scripts/verify)",
       "Bash(./scripts/verify)",
@@ -33,7 +36,12 @@
       "Bash(gh pr view *)",
       "Bash(gh pr diff *)",
       "Bash(gh pr list *)",
-      "Bash(gh pr checks *)"
+      "Bash(gh pr checks *)",
+      "Bash(swarm-notify *)",
+      "Bash(swarm-metrics *)",
+      "Bash(gh auth status*)",
+      "Bash(date *)",
+      "Bash(gh pr edit *)"
     ],
     "deny": [
       "Bash(git push * main)",
