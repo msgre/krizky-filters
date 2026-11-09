@@ -10,7 +10,6 @@ from krizky_filters.json_gen import generate_filter_json
 from krizky_filters.plugin import FilterPlugin, _build_filter_config, _resolve_url_template
 from krizky_filters.values import fetch_filter_values
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
@@ -38,9 +37,7 @@ def conn():
 def conn_tags():
     c = sqlite3.connect(":memory:")
     c.row_factory = sqlite3.Row
-    c.execute(
-        'CREATE TABLE mista (slug TEXT, nazev TEXT, stitky TEXT, stitky_slug TEXT)'
-    )
+    c.execute("CREATE TABLE mista (slug TEXT, nazev TEXT, stitky TEXT, stitky_slug TEXT)")
     c.executemany(
         "INSERT INTO mista VALUES (?, ?, ?, ?)",
         [
@@ -128,7 +125,9 @@ def test_fetch_filter_values_sort_by_count(conn):
 def test_fetch_filter_values_sort_alpha(conn):
     """Explicit sort: alpha (locale-friendly, diacritics stripped)."""
     values = fetch_filter_values(
-        conn, "mista", "typ",
+        conn,
+        "mista",
+        "typ",
         {"label": "Typ", "type": "select", "sort": "alpha"},
     )
     # kriz < socha alphabetically
@@ -140,14 +139,19 @@ def test_fetch_filter_values_sort_alpha_diacritics():
     c = sqlite3.connect(":memory:")
     c.row_factory = sqlite3.Row
     c.execute("CREATE TABLE t (val TEXT, val_slug TEXT)")
-    c.executemany("INSERT INTO t VALUES (?, ?)", [
-        ("zebra", "zebra"),
-        ("čáp", "cap"),
-        ("banán", "banan"),
-    ])
+    c.executemany(
+        "INSERT INTO t VALUES (?, ?)",
+        [
+            ("zebra", "zebra"),
+            ("čáp", "cap"),
+            ("banán", "banan"),
+        ],
+    )
     c.commit()
     values = fetch_filter_values(
-        c, "t", "val",
+        c,
+        "t",
+        "val",
         {"label": "V", "type": "select", "sort": "alpha"},
     )
     slugs = [v["slug"] for v in values]
@@ -158,17 +162,20 @@ def test_fetch_filter_values_sort_alpha_diacritics():
 
 def test_fetch_filter_values_sort_explicit_multicolumn(conn):
     """Explicit multi-column: -count,alpha equivalent to preset 'count'."""
-    v1 = fetch_filter_values(conn, "mista", "typ",
-                             {"label": "T", "type": "select", "sort": "count"})
-    v2 = fetch_filter_values(conn, "mista", "typ",
-                             {"label": "T", "type": "select", "sort": "-count,alpha"})
+    v1 = fetch_filter_values(
+        conn, "mista", "typ", {"label": "T", "type": "select", "sort": "count"}
+    )
+    v2 = fetch_filter_values(
+        conn, "mista", "typ", {"label": "T", "type": "select", "sort": "-count,alpha"}
+    )
     assert [v["slug"] for v in v1] == [v["slug"] for v in v2]
 
 
 def test_fetch_filter_values_sort_reversed_priority(conn):
     """Alpha ASC as primary, count DESC as tiebreaker."""
-    values = fetch_filter_values(conn, "mista", "typ",
-                                 {"label": "T", "type": "select", "sort": "alpha,-count"})
+    values = fetch_filter_values(
+        conn, "mista", "typ", {"label": "T", "type": "select", "sort": "alpha,-count"}
+    )
     # kriz < socha alphabetically, so kriz first regardless of count
     assert [v["slug"] for v in values] == ["kriz", "socha"]
 
@@ -178,14 +185,20 @@ def test_fetch_filter_values_sort_alpha_desc():
     c = sqlite3.connect(":memory:")
     c.row_factory = sqlite3.Row
     c.execute("CREATE TABLE t (val TEXT, val_slug TEXT)")
-    c.executemany("INSERT INTO t VALUES (?, ?)", [
-        ("apple", "apple"),
-        ("banana", "banana"),
-        ("cherry", "cherry"),
-    ])
+    c.executemany(
+        "INSERT INTO t VALUES (?, ?)",
+        [
+            ("apple", "apple"),
+            ("banana", "banana"),
+            ("cherry", "cherry"),
+        ],
+    )
     c.commit()
     values = fetch_filter_values(
-        c, "t", "val", {"label": "V", "type": "select", "sort": "-alpha"},
+        c,
+        "t",
+        "val",
+        {"label": "V", "type": "select", "sort": "-alpha"},
     )
     assert [v["slug"] for v in values] == ["cherry", "banana", "apple"]
     c.close()
@@ -194,8 +207,9 @@ def test_fetch_filter_values_sort_alpha_desc():
 def test_fetch_filter_values_sort_invalid_field(conn):
     """Unknown field should raise a clear ValueError."""
     with pytest.raises(ValueError, match="Unknown sort field"):
-        fetch_filter_values(conn, "mista", "typ",
-                            {"label": "T", "type": "select", "sort": "banana"})
+        fetch_filter_values(
+            conn, "mista", "typ", {"label": "T", "type": "select", "sort": "banana"}
+        )
 
 
 def test_fetch_filter_values_sort_explicit_order():
@@ -203,21 +217,32 @@ def test_fetch_filter_values_sort_explicit_order():
     c = sqlite3.connect(":memory:")
     c.row_factory = sqlite3.Row
     c.execute("CREATE TABLE t (val TEXT, val_slug TEXT)")
-    c.executemany("INSERT INTO t VALUES (?, ?)", [
-        ("2. polovina 19. století", "2-19"),
-        ("1. polovina 20. století", "1-20"),
-        ("1. polovina 19. století", "1-19"),
-        ("2. polovina 20. století", "2-20"),
-    ])
+    c.executemany(
+        "INSERT INTO t VALUES (?, ?)",
+        [
+            ("2. polovina 19. století", "2-19"),
+            ("1. polovina 20. století", "1-20"),
+            ("1. polovina 19. století", "1-19"),
+            ("2. polovina 20. století", "2-20"),
+        ],
+    )
     c.commit()
     values = fetch_filter_values(
-        c, "t", "val",
-        {"label": "V", "type": "select", "sort": {"order": [
-            "1. polovina 19. století",
-            "2. polovina 19. století",
-            "1. polovina 20. století",
-            "2. polovina 20. století",
-        ]}},
+        c,
+        "t",
+        "val",
+        {
+            "label": "V",
+            "type": "select",
+            "sort": {
+                "order": [
+                    "1. polovina 19. století",
+                    "2. polovina 19. století",
+                    "1. polovina 20. století",
+                    "2. polovina 20. století",
+                ]
+            },
+        },
     )
     assert [v["value"] for v in values] == [
         "1. polovina 19. století",
@@ -233,19 +258,28 @@ def test_fetch_filter_values_sort_order_with_extras():
     c = sqlite3.connect(":memory:")
     c.row_factory = sqlite3.Row
     c.execute("CREATE TABLE t (val TEXT, val_slug TEXT)")
-    c.executemany("INSERT INTO t VALUES (?, ?)", [
-        ("baroko", "baroko"),
-        ("gotika", "gotika"),
-        ("renesance", "renesance"),   # not in order
-        ("empír", "empir"),           # not in order
-    ])
+    c.executemany(
+        "INSERT INTO t VALUES (?, ?)",
+        [
+            ("baroko", "baroko"),
+            ("gotika", "gotika"),
+            ("renesance", "renesance"),  # not in order
+            ("empír", "empir"),  # not in order
+        ],
+    )
     c.commit()
     values = fetch_filter_values(
-        c, "t", "val",
-        {"label": "V", "type": "select", "sort": {
-            "order": ["gotika", "baroko"],
-            "fallback": "alpha",   # rest alphabetically
-        }},
+        c,
+        "t",
+        "val",
+        {
+            "label": "V",
+            "type": "select",
+            "sort": {
+                "order": ["gotika", "baroko"],
+                "fallback": "alpha",  # rest alphabetically
+            },
+        },
     )
     slugs = [v["slug"] for v in values]
     # gotika, baroko (in order) → empir, renesance (alpha for rest)
@@ -256,7 +290,9 @@ def test_fetch_filter_values_sort_order_with_extras():
 def test_fetch_filter_values_sort_order_empty_list(conn):
     """Empty order list falls back to fallback spec."""
     values = fetch_filter_values(
-        conn, "mista", "typ",
+        conn,
+        "mista",
+        "typ",
         {"label": "T", "type": "select", "sort": {"order": [], "fallback": "alpha"}},
     )
     assert [v["slug"] for v in values] == ["kriz", "socha"]
@@ -593,7 +629,8 @@ def test_extra_template_vars_auto_detects_url(conn):
     values = result["page_filters"]["filter_page"]["typ"]["values"]
     # Every fetched value should have URL derived from the category page's path.
     for v in values:
-        assert v["url"].startswith("/kategorie/") and v["url"].endswith(".html")
+        assert v["url"].startswith("/kategorie/")
+        assert v["url"].endswith(".html")
 
 
 # ── plugin.py — after_page_written ───────────────────────────────────────────
@@ -617,10 +654,20 @@ def test_after_page_written_idempotent(tmp_path, minimal_config):
     p = FilterPlugin()
     page_cfg = minimal_config["site"]["pages"]["vsechna_mista"]
     # Call twice — must not raise
-    p.after_page_written(page_cfg=page_cfg, html_path="/x.html", output_dir=tmp_path,
-                         records=[], config=minimal_config)
-    p.after_page_written(page_cfg=page_cfg, html_path="/y.html", output_dir=tmp_path,
-                         records=[], config=minimal_config)
+    p.after_page_written(
+        page_cfg=page_cfg,
+        html_path="/x.html",
+        output_dir=tmp_path,
+        records=[],
+        config=minimal_config,
+    )
+    p.after_page_written(
+        page_cfg=page_cfg,
+        html_path="/y.html",
+        output_dir=tmp_path,
+        records=[],
+        config=minimal_config,
+    )
     assert (tmp_path / "krizky-filters" / "filters.js").exists()
 
 
@@ -628,8 +675,13 @@ def test_after_page_written_generates_json(tmp_path, minimal_config):
     p = FilterPlugin()
     page_cfg = minimal_config["site"]["pages"]["vsechna_mista"]
     records = [{"slug": "a", "nazev": "A", "typ": "kriz"}]
-    p.after_page_written(page_cfg=page_cfg, html_path="/vsechna-mista.html",
-                         output_dir=tmp_path, records=records, config=minimal_config)
+    p.after_page_written(
+        page_cfg=page_cfg,
+        html_path="/vsechna-mista.html",
+        output_dir=tmp_path,
+        records=records,
+        config=minimal_config,
+    )
     json_path = tmp_path / "jsons" / "vsechna-mista-filter.json"
     assert json_path.exists()
     data = json.loads(json_path.read_text())

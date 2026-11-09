@@ -5,9 +5,9 @@ import shutil
 from pathlib import Path, PurePosixPath
 
 from jinja2 import ChoiceLoader, FileSystemLoader
-
 from krizky.hooks import hookimpl
 from krizky.render import render_config_str
+
 from krizky_filters.json_gen import generate_filter_json
 from krizky_filters.values import fetch_filter_values
 
@@ -22,8 +22,7 @@ def _get_main_table(config: dict) -> str:
 
 def _iter_dimensions(filters_cfg: dict):
     """Yield (dim_key, dim_cfg) from filters.dimensions."""
-    for key, val in filters_cfg.get("dimensions", {}).items():
-        yield key, val
+    yield from filters_cfg.get("dimensions", {}).items()
 
 
 def _resolve_url_template(config: dict, dim_key: str, dim_cfg: dict) -> str:
@@ -100,16 +99,16 @@ class FilterPlugin:
             return
         loaders = env.loader.loaders
         already = any(
-            isinstance(ldr, FileSystemLoader)
-            and str(_PLUGIN_TEMPLATES) in ldr.searchpath
+            isinstance(ldr, FileSystemLoader) and str(_PLUGIN_TEMPLATES) in ldr.searchpath
             for ldr in loaders
         )
         if not already:
             # After project templates, before built-in krizky templates.
-            env.loader.loaders = (
-                [loaders[0], FileSystemLoader(str(_PLUGIN_TEMPLATES))]
-                + loaders[1:]
-            )
+            env.loader.loaders = [
+                loaders[0],
+                FileSystemLoader(str(_PLUGIN_TEMPLATES)),
+                *loaders[1:],
+            ]
 
     @hookimpl
     def extra_template_vars(self, config, config_dir, conn):

@@ -19,17 +19,19 @@
  *   [data-filter-count]                         single element with {filtered}/{total} template
  */
 (function () {
-  "use strict";
+  'use strict';
 
   // ── Bootstrap ────────────────────────────────────────────────────────────
 
-  const configEl = document.getElementById("filter-config");
-  if (!configEl) return;
+  const configEl = document.getElementById('filter-config');
+  if (!configEl) {
+    return;
+  }
 
   let config;
   try {
     config = JSON.parse(configEl.textContent);
-  } catch (e) {
+  } catch {
     return;
   }
 
@@ -37,9 +39,11 @@
   const paginationWindow = config.paginationWindow ?? 2;
   const paginationBoundary = config.paginationBoundary ?? 1;
   const facetsEnabled = config.facets === true;
-  const facetsMode = config.facetsMode || "hide";  // "hide" | "disable"
+  const facetsMode = config.facetsMode || 'hide'; // "hide" | "disable"
   const grid = document.querySelector(gridSelector);
-  if (!grid) return;
+  if (!grid) {
+    return;
+  }
 
   /** @type {Map<string, Set<string>>} dim → active slugs */
   const state = new Map();
@@ -54,14 +58,14 @@
     .then((data) => {
       allRecords = data;
       // Hide static (server-rendered) pagination — JS takes over from here.
-      document.querySelectorAll("[data-static-pagination]").forEach((el) => {
+      document.querySelectorAll('[data-static-pagination]').forEach((el) => {
         el.hidden = true;
       });
       parseUrlState();
       attachFilterListeners();
       attachClearListeners();
       attachTextListeners();
-      window.addEventListener("popstate", () => {
+      window.addEventListener('popstate', () => {
         parseUrlState();
         filterAndRender();
       });
@@ -75,23 +79,27 @@
 
   // Equivalent of Python render.page_path(): /base.html → /base-N.html for N>1.
   function pagePath(base, pageNum) {
-    if (pageNum === 1) return base;
-    const dot = base.lastIndexOf(".");
-    return dot < 0
-      ? base + "-" + pageNum
-      : base.slice(0, dot) + "-" + pageNum + base.slice(dot);
+    if (pageNum === 1) {
+      return base;
+    }
+    const dot = base.lastIndexOf('.');
+    return dot < 0 ? `${base}-${pageNum}` : `${base.slice(0, dot)}-${pageNum}${base.slice(dot)}`;
   }
 
   // Parse current page number from URL path using the same scheme as server.
   function pageFromPath(base) {
     const path = location.pathname;
-    if (path === base) return 1;
-    const dot = base.lastIndexOf(".");
-    if (dot < 0) return 1;
+    if (path === base) {
+      return 1;
+    }
+    const dot = base.lastIndexOf('.');
+    if (dot < 0) {
+      return 1;
+    }
     const stem = base.slice(0, dot);
     const ext = base.slice(dot);
     const match = path.slice(stem.length).match(/^-(\d+)(.*)$/);
-    return (match && match[2] === ext) ? parseInt(match[1], 10) : 1;
+    return match && match[2] === ext ? parseInt(match[1], 10) : 1;
   }
 
   function parseUrlState() {
@@ -99,12 +107,14 @@
     const params = new URLSearchParams(location.search);
     for (const [dim, dimCfg] of Object.entries(dimensions)) {
       const raw = params.get(dim);
-      if (!raw) continue;
-      if (dimCfg.type === "text") {
+      if (!raw) {
+        continue;
+      }
+      if (dimCfg.type === 'text') {
         // Text queries can contain any character (including commas) — no split.
         state.set(dim, new Set([raw]));
       } else {
-        state.set(dim, new Set(raw.split(",").filter(Boolean)));
+        state.set(dim, new Set(raw.split(',').filter(Boolean)));
       }
     }
     currentPage = pageFromPath(basePath);
@@ -113,40 +123,47 @@
   function serializeState() {
     const params = new URLSearchParams();
     for (const [dim, values] of state) {
-      if (values.size > 0) params.set(dim, [...values].join(","));
+      if (values.size > 0) {
+        params.set(dim, [...values].join(','));
+      }
     }
     return params.toString();
   }
 
   // NFKD-normalized text (strip diacritics, lowercase) — used for full-text search.
   function normalizeText(s) {
-    return String(s || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
+    return String(s || '')
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[̀-ͯ]/g, '');
   }
 
   // Build full href for page N: path encodes page number, query encodes filters.
   function pageHref(pageNum) {
     const qs = serializeState();
-    return pagePath(basePath, pageNum) + (qs ? "?" + qs : "");
+    return pagePath(basePath, pageNum) + (qs ? `?${qs}` : '');
   }
 
   function updateUrl() {
-    history.pushState({}, "", pageHref(currentPage));
+    history.pushState({}, '', pageHref(currentPage));
   }
 
   // ── Filter control listeners ──────────────────────────────────────────────
 
   function attachFilterListeners() {
-    document.querySelectorAll("[data-filter-value][data-filter-dimension]").forEach((pill) => {
-      pill.addEventListener("click", (e) => {
+    document.querySelectorAll('[data-filter-value][data-filter-dimension]').forEach((pill) => {
+      pill.addEventListener('click', (e) => {
         e.preventDefault();
         const dim = pill.dataset.filterDimension;
         const slug = pill.dataset.filterValue;
         const dimCfg = dimensions[dim];
-        if (!dimCfg) return;
+        if (!dimCfg) {
+          return;
+        }
 
         let active = state.get(dim) || new Set();
 
-        if (dimCfg.type === "select") {
+        if (dimCfg.type === 'select') {
           // radio-like: clicking active value deselects; otherwise replace
           if (active.has(slug)) {
             active = new Set();
@@ -181,27 +198,35 @@
   // Extract slugs a record has for a given dimension (single or many).
   function recordSlugs(record, dim) {
     const dimCfg = dimensions[dim];
-    if (!dimCfg) return [];
+    if (!dimCfg) {
+      return [];
+    }
     const val = record[dim];
     if (dimCfg.many) {
       const valArr = Array.isArray(val) ? val : [];
-      const slugObj = record[dim + "_slug"];
-      return (slugObj && typeof slugObj === "object" && !Array.isArray(slugObj))
+      const slugObj = record[`${dim}_slug`];
+      return slugObj && typeof slugObj === 'object' && !Array.isArray(slugObj)
         ? valArr.map((v) => slugObj[v] ?? String(v))
         : valArr.map(String);
     }
-    return [String(record[dim + "_slug"] ?? val ?? "")];
+    return [String(record[`${dim}_slug`] ?? val ?? '')];
   }
 
   // True if a record matches the filter on ONE dimension (OR within dim,
   // word AND for text dims: split by whitespace, every word must appear in
   // at least one of the search fields).
   function matchesDim(record, dim, active) {
-    if (active.size === 0) return true;
+    if (active.size === 0) {
+      return true;
+    }
     const dimCfg = dimensions[dim];
-    if (dimCfg && dimCfg.type === "text") {
-      const words = normalizeText([...active][0]).split(/\s+/).filter(Boolean);
-      if (words.length === 0) return true;
+    if (dimCfg && dimCfg.type === 'text') {
+      const words = normalizeText([...active][0])
+        .split(/\s+/)
+        .filter(Boolean);
+      if (words.length === 0) {
+        return true;
+      }
       const fields = dimCfg.searchFields || [];
       const haystacks = fields.map((f) => normalizeText(record[f]));
       return words.every((w) => haystacks.some((h) => h.includes(w)));
@@ -212,7 +237,9 @@
   // True if a record matches ALL active filters (AND between dims).
   function matchesFilter(record) {
     for (const [dim, active] of state) {
-      if (!matchesDim(record, dim, active)) return false;
+      if (!matchesDim(record, dim, active)) {
+        return false;
+      }
     }
     return true;
   }
@@ -222,8 +249,12 @@
   // of all OTHER active filters (facet self-exclusion rule).
   function matchesAllExcept(record, excludeDim) {
     for (const [dim, active] of state) {
-      if (dim === excludeDim) continue;
-      if (!matchesDim(record, dim, active)) return false;
+      if (dim === excludeDim) {
+        continue;
+      }
+      if (!matchesDim(record, dim, active)) {
+        return false;
+      }
     }
     return true;
   }
@@ -236,12 +267,16 @@
     const facets = {};
     for (const dim of Object.keys(dimensions)) {
       // Text dims have no discrete values — nothing to facet-count.
-      if (dimensions[dim].type === "text") continue;
+      if (dimensions[dim].type === 'text') {
+        continue;
+      }
       const subset = allRecords.filter((r) => matchesAllExcept(r, dim));
       const counts = {};
       for (const record of subset) {
         for (const slug of recordSlugs(record, dim)) {
-          if (!slug) continue;
+          if (!slug) {
+            continue;
+          }
           counts[slug] = (counts[slug] || 0) + 1;
         }
       }
@@ -253,39 +288,51 @@
   // ── Sort (parallel to Python values.py::_parse_sort) ─────────────────────
 
   const SORT_ALIASES = {
-    count: "-count,alpha",   // popularity preset
-    alpha: "alpha",
+    count: '-count,alpha', // popularity preset
+    alpha: 'alpha',
   };
 
   function parseSort(spec) {
-    let s = (spec || "count").trim();
-    if (s in SORT_ALIASES) s = SORT_ALIASES[s];
+    let s = (spec || 'count').trim();
+    if (s in SORT_ALIASES) {
+      s = SORT_ALIASES[s];
+    }
     const out = [];
-    for (let part of s.split(",")) {
+    for (let part of s.split(',')) {
       part = part.trim();
-      if (!part) continue;
-      const desc = part.startsWith("-");
-      const field = part.replace(/^-+/, "");
-      if (field === "count" || field === "alpha") out.push([field, desc]);
+      if (!part) {
+        continue;
+      }
+      const desc = part.startsWith('-');
+      const field = part.replace(/^-+/, '');
+      if (field === 'count' || field === 'alpha') {
+        out.push([field, desc]);
+      }
     }
     return out;
   }
 
   // Locale-friendly alpha key — strips diacritics so 'č' sorts near 'c'.
   function sortKeyAlpha(text) {
-    return (text || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
+    return (text || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '');
   }
 
   // Stable multi-column sort by string spec (mirrors Python _sort_by_columns).
   function sortWrappedByColumns(wrapped, spec) {
     const parsed = parseSort(spec);
-    if (parsed.length === 0) return;
+    if (parsed.length === 0) {
+      return;
+    }
     for (const [field, desc] of [...parsed].reverse()) {
       wrapped.sort((a, b) => {
-        const va = field === "count" ? a.count : a.alphaKey;
-        const vb = field === "count" ? b.count : b.alphaKey;
-        if (va < vb) return desc ? 1 : -1;
-        if (va > vb) return desc ? -1 : 1;
+        const va = field === 'count' ? a.count : a.alphaKey;
+        const vb = field === 'count' ? b.count : b.alphaKey;
+        if (va < vb) {
+          return desc ? 1 : -1;
+        }
+        if (va > vb) {
+          return desc ? -1 : 1;
+        }
         return 0;
       });
     }
@@ -297,7 +344,7 @@
     const inOrder = wrapped.filter((w) => orderMap.has(w.label));
     const rest = wrapped.filter((w) => !orderMap.has(w.label));
     inOrder.sort((a, b) => orderMap.get(a.label) - orderMap.get(b.label));
-    sortWrappedByColumns(rest, fallback || "count");
+    sortWrappedByColumns(rest, fallback || 'count');
     return [...inOrder, ...rest];
   }
 
@@ -306,34 +353,40 @@
   // dynamic counts.
   function reorderValues() {
     const groups = new Map();
-    document.querySelectorAll("[data-filter-value][data-filter-dimension]").forEach((el) => {
+    document.querySelectorAll('[data-filter-value][data-filter-dimension]').forEach((el) => {
       const dim = el.dataset.filterDimension;
-      if (!groups.has(dim)) groups.set(dim, []);
+      if (!groups.has(dim)) {
+        groups.set(dim, []);
+      }
       groups.get(dim).push(el);
     });
 
     for (const [dim, items] of groups) {
       const dimCfg = dimensions[dim];
-      if (!dimCfg) continue;
+      if (!dimCfg) {
+        continue;
+      }
       const spec = dimCfg.sort;
 
       let wrapped = items.map((el) => {
-        const wrap = el.closest("[data-combobox-option]") || el;
-        const countEl = el.querySelector("[data-facet-count]");
-        const count = countEl ? (parseInt(countEl.textContent, 10) || 0) : 0;
-        const labelEl = el.querySelector(".fbar-item-label");
+        const wrap = el.closest('[data-combobox-option]') || el;
+        const countEl = el.querySelector('[data-facet-count]');
+        const count = countEl ? parseInt(countEl.textContent, 10) || 0 : 0;
+        const labelEl = el.querySelector('.fbar-item-label');
         const label = (labelEl ? labelEl.textContent : el.textContent).trim();
         return { wrap, count, label, alphaKey: sortKeyAlpha(label) };
       });
 
-      if (spec && typeof spec === "object" && Array.isArray(spec.order)) {
+      if (spec && typeof spec === 'object' && Array.isArray(spec.order)) {
         wrapped = sortWrappedByOrder(wrapped, spec.order, spec.fallback);
       } else {
         sortWrappedByColumns(wrapped, spec);
       }
 
       const parent = wrapped.length > 0 ? wrapped[0].wrap.parentNode : null;
-      if (parent) wrapped.forEach(({ wrap }) => parent.appendChild(wrap));
+      if (parent) {
+        wrapped.forEach(({ wrap }) => parent.appendChild(wrap));
+      }
     }
   }
 
@@ -342,47 +395,57 @@
   function applyFacets(facets) {
     const dimAvailable = {};
 
-    document.querySelectorAll("[data-filter-value][data-filter-dimension]").forEach((el) => {
+    document.querySelectorAll('[data-filter-value][data-filter-dimension]').forEach((el) => {
       const dim = el.dataset.filterDimension;
       const slug = el.dataset.filterValue;
       const count = (facets[dim] && facets[dim][slug]) || 0;
 
       // Update visible count if a count element exists
-      const countEl = el.querySelector("[data-facet-count]");
-      if (countEl) countEl.textContent = count;
+      const countEl = el.querySelector('[data-facet-count]');
+      if (countEl) {
+        countEl.textContent = count;
+      }
 
-      const wrap = el.closest("[data-combobox-option]") || el;
+      const wrap = el.closest('[data-combobox-option]') || el;
       if (count === 0) {
-        if (facetsMode === "hide") {
+        if (facetsMode === 'hide') {
           wrap.hidden = true;
-          wrap.setAttribute("data-facet-hidden", "");
+          wrap.setAttribute('data-facet-hidden', '');
         } else {
-          wrap.classList.add("is-disabled");
-          wrap.setAttribute("aria-disabled", "true");
-          wrap.removeAttribute("data-facet-hidden");
+          wrap.classList.add('is-disabled');
+          wrap.setAttribute('aria-disabled', 'true');
+          wrap.removeAttribute('data-facet-hidden');
         }
       } else {
         wrap.hidden = false;
-        wrap.classList.remove("is-disabled");
-        wrap.removeAttribute("aria-disabled");
-        wrap.removeAttribute("data-facet-hidden");
+        wrap.classList.remove('is-disabled');
+        wrap.removeAttribute('aria-disabled');
+        wrap.removeAttribute('data-facet-hidden');
       }
 
-      if (!dimAvailable[dim]) dimAvailable[dim] = 0;
-      if (count > 0) dimAvailable[dim] += 1;
+      if (!dimAvailable[dim]) {
+        dimAvailable[dim] = 0;
+      }
+      if (count > 0) {
+        dimAvailable[dim] += 1;
+      }
     });
 
     // Disable whole dimension when nothing is available (unless it has an
     // active filter — user must be able to unset it).
-    document.querySelectorAll("[data-combobox]").forEach((cb) => {
+    document.querySelectorAll('[data-combobox]').forEach((cb) => {
       const dim = cb.dataset.comboboxDim;
-      if (!dim) return;
+      if (!dim) {
+        return;
+      }
       const hasActive = state.has(dim) && state.get(dim).size > 0;
       const hasAvailable = (dimAvailable[dim] || 0) > 0;
       const disabled = !hasActive && !hasAvailable;
-      cb.classList.toggle("is-disabled", disabled);
-      const trigger = cb.querySelector("[data-combobox-trigger]");
-      if (trigger) trigger.setAttribute("aria-disabled", String(disabled));
+      cb.classList.toggle('is-disabled', disabled);
+      const trigger = cb.querySelector('[data-combobox-trigger]');
+      if (trigger) {
+        trigger.setAttribute('aria-disabled', String(disabled));
+      }
     });
   }
 
@@ -405,7 +468,9 @@
     const total = filtered.length;
     const size = pageSize > 0 ? pageSize : total;
     const totalPages = size > 0 ? Math.max(1, Math.ceil(total / size)) : 1;
-    if (currentPage > totalPages) currentPage = 1;
+    if (currentPage > totalPages) {
+      currentPage = 1;
+    }
 
     const start = (currentPage - 1) * size;
     const pageRecords = filtered.slice(start, start + size);
@@ -416,60 +481,66 @@
     // Notify other scripts (e.g. custom widgets, map plugin) about the update.
     // `filteredRecords` gives references (no copy), so other plugins can react
     // to filter changes without re-implementing the matcher.
-    document.dispatchEvent(new CustomEvent("krizky-filters:update", {
-      detail: {
-        filtered: filtered.length,        // count (subset)
-        total: allRecords.length,         // count (full dataset)
-        filteredRecords: filtered,        // actual records that matched
-        activeState: Object.fromEntries([...state].map(([k, v]) => [k, [...v]])),
-        facets: facets,                   // null when facets disabled
-      },
-    }));
+    document.dispatchEvent(
+      new CustomEvent('krizky-filters:update', {
+        detail: {
+          filtered: filtered.length, // count (subset)
+          total: allRecords.length, // count (full dataset)
+          filteredRecords: filtered, // actual records that matched
+          activeState: Object.fromEntries([...state].map(([k, v]) => [k, [...v]])),
+          facets, // null when facets disabled
+        },
+      })
+    );
   }
 
   function renderCards(records) {
-    const tmpl = document.getElementById("card-template");
+    const tmpl = document.getElementById('card-template');
     if (!tmpl) {
-      grid.innerHTML = "";
+      grid.innerHTML = '';
       return;
     }
 
-    grid.classList.add("is-loading");
+    grid.classList.add('is-loading');
     const fragment = document.createDocumentFragment();
 
     records.forEach((record) => {
       const clone = tmpl.content.cloneNode(true);
-      clone.querySelectorAll("[data-field]").forEach((el) => {
+      clone.querySelectorAll('[data-field]').forEach((el) => {
         const field = el.dataset.field;
-        const val = record[field] ?? "";
+        const val = record[field] ?? '';
 
         if (el.dataset.hrefPattern) {
           // Any element with data-href-pattern (SVG <use>, <a>, etc.):
           // fill href attribute from template.
-          const href = el.dataset.hrefPattern.replace("{value}", String(val));
-          if (el.tagName === "A") el.href = href;
-          else el.setAttribute("href", href);
-        } else if (el.tagName === "IMG") {
+          const href = el.dataset.hrefPattern.replace('{value}', String(val));
+          if (el.tagName === 'A') {
+            el.href = href;
+          } else {
+            el.setAttribute('href', href);
+          }
+        } else if (el.tagName === 'IMG') {
           el.src = String(val);
-        } else if (el.tagName === "A") {
+        } else if (el.tagName === 'A') {
           el.href = String(val);
-        } else if ("fieldItemClass" in el.dataset) {
+        } else if ('fieldItemClass' in el.dataset) {
           // Array field: data-field-item-class declares this element expects a list.
           // Treat non-array values (null, string) as empty to avoid showing stale
           // template content from the first record. Skip null/empty items.
-          const arr = (Array.isArray(val) ? val : [])
-            .filter((v) => v != null && String(v).trim() !== "");
-          const itemClass = el.dataset.fieldItemClass || "";
+          const arr = (Array.isArray(val) ? val : []).filter(
+            (v) => v !== null && v !== undefined && String(v).trim() !== ''
+          );
+          const itemClass = el.dataset.fieldItemClass || '';
           el.innerHTML = arr
             .map((v) => `<span class="${itemClass}">${escapeHtml(String(v))}</span>`)
-            .join("");
+            .join('');
           el.hidden = arr.length === 0;
         } else if (el.dataset.truncate) {
           const length = parseInt(el.dataset.truncate, 10);
-          const killwords = "truncateKillwords" in el.dataset;
-          const end = el.dataset.truncateEnd ?? "...";
-          const leeway = el.dataset.truncateLeeway !== undefined
-            ? parseInt(el.dataset.truncateLeeway, 10) : 5;
+          const killwords = 'truncateKillwords' in el.dataset;
+          const end = el.dataset.truncateEnd ?? '...';
+          const leeway =
+            el.dataset.truncateLeeway !== undefined ? parseInt(el.dataset.truncateLeeway, 10) : 5;
           el.textContent = jinjaTruncate(String(val), length, killwords, end, leeway);
         } else if (el.dataset.dateFormat && val) {
           el.textContent = formatDate(String(val), el.dataset.dateFormat);
@@ -478,73 +549,84 @@
         }
       });
       // data-hide-if-empty: hide element when the referenced record field is empty
-      clone.querySelectorAll("[data-hide-if-empty]").forEach((el) => {
+      clone.querySelectorAll('[data-hide-if-empty]').forEach((el) => {
         const field = el.dataset.hideIfEmpty;
         const val = record[field];
-        const empty = val == null
-          || (typeof val === "string" && val.trim() === "")
-          || (Array.isArray(val) && val.length === 0);
+        const empty =
+          val === null ||
+          val === undefined ||
+          (typeof val === 'string' && val.trim() === '') ||
+          (Array.isArray(val) && val.length === 0);
         el.hidden = empty;
       });
 
       // data-field-photo: construct photo URL from row ID + size + format
-      clone.querySelectorAll("[data-field-photo]").forEach((el) => {
+      clone.querySelectorAll('[data-field-photo]').forEach((el) => {
         const rowId = record[el.dataset.fieldPhoto];
         if (!rowId || !config.photosBaseUrl) {
           el.hidden = true;
           return;
         }
-        const pad = parseInt(el.dataset.photoPad ?? "3", 10);
-        const size = el.dataset.photoSize || "thumb";
-        const fmt = el.dataset.photoFormat || "jpg";
-        const paddedId = String(rowId).padStart(pad, "0");
+        const pad = parseInt(el.dataset.photoPad ?? '3', 10);
+        const size = el.dataset.photoSize || 'thumb';
+        const fmt = el.dataset.photoFormat || 'jpg';
+        const paddedId = String(rowId).padStart(pad, '0');
         el.src = `${config.photosBaseUrl}/${paddedId}_${size}.${fmt}`;
         el.hidden = false;
         // Apply focal point if krizky-photos exposed one for this photo.
         const focal = window.krizkyPhotos?.focalPoints?.[paddedId];
-        if (focal) el.style.objectPosition = focal;
+        if (focal) {
+          el.style.objectPosition = focal;
+        }
         el.onload = () => {
-          const thumb = el.closest("[data-thumb]");
-          if (thumb) thumb.classList.remove("placeholder");
+          const thumb = el.closest('[data-thumb]');
+          if (thumb) {
+            thumb.classList.remove('placeholder');
+          }
         };
-        el.onerror = () => { el.hidden = true; };
+        el.onerror = () => {
+          el.hidden = true;
+        };
       });
 
       fragment.appendChild(clone);
     });
 
-    grid.innerHTML = "";
+    grid.innerHTML = '';
     grid.appendChild(fragment);
-    grid.classList.remove("is-loading");
+    grid.classList.remove('is-loading');
   }
 
   function escapeHtml(str) {
-    return str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   // Equivalent of Jinja2's do_truncate (same defaults: killwords=false, end="...", leeway=5).
   function jinjaTruncate(s, length, killwords, end, leeway) {
-    if (s.length <= length + leeway) return s;
-    if (killwords) return s.slice(0, length - end.length) + end;
+    if (s.length <= length + leeway) {
+      return s;
+    }
+    if (killwords) {
+      return s.slice(0, length - end.length) + end;
+    }
     const cut = s.slice(0, length - end.length);
-    const lastSpace = cut.lastIndexOf(" ");
+    const lastSpace = cut.lastIndexOf(' ');
     return (lastSpace >= 0 ? cut.slice(0, lastSpace) : cut) + end;
   }
 
   function formatDate(dateStr, fmt) {
-    const d = new Date(dateStr.replace(" ", "T"));
-    if (isNaN(d.getTime())) return dateStr;
+    const d = new Date(dateStr.replace(' ', 'T'));
+    if (isNaN(d.getTime())) {
+      return dateStr;
+    }
     const day = d.getDate();
     const month = d.getMonth() + 1;
     const year = d.getFullYear();
     return fmt
       .replace(/%-d/g, String(day))
-      .replace(/%d/g, String(day).padStart(2, "0"))
+      .replace(/%d/g, String(day).padStart(2, '0'))
       .replace(/%-m/g, String(month))
-      .replace(/%m/g, String(month).padStart(2, "0"))
+      .replace(/%m/g, String(month).padStart(2, '0'))
       .replace(/%Y/g, String(year))
       .replace(/%y/g, String(year).slice(-2));
   }
@@ -557,14 +639,22 @@
   // Returns array of page numbers with null for ellipsis gaps.
   function paginationPages(current, total, win, boundary) {
     const visible = new Set();
-    for (let i = 1; i <= Math.min(boundary, total); i++) visible.add(i);
-    for (let i = Math.max(total - boundary + 1, 1); i <= total; i++) visible.add(i);
-    for (let i = Math.max(1, current - win); i <= Math.min(total, current + win); i++) visible.add(i);
+    for (let i = 1; i <= Math.min(boundary, total); i++) {
+      visible.add(i);
+    }
+    for (let i = Math.max(total - boundary + 1, 1); i <= total; i++) {
+      visible.add(i);
+    }
+    for (let i = Math.max(1, current - win); i <= Math.min(total, current + win); i++) {
+      visible.add(i);
+    }
 
     const result = [];
     let prev = null;
     for (const p of [...visible].sort((a, b) => a - b)) {
-      if (prev !== null && p - prev > 1) result.push(null);
+      if (prev !== null && p - prev > 1) {
+        result.push(null);
+      }
       result.push(p);
       prev = p;
     }
@@ -580,13 +670,15 @@
 
   function renderPagination(page, totalPages) {
     if (!paginationEl) {
-      paginationEl = document.querySelector("[data-filter-pagination]");
+      paginationEl = document.querySelector('[data-filter-pagination]');
     }
-    if (!paginationEl) return;
+    if (!paginationEl) {
+      return;
+    }
 
     if (totalPages <= 1) {
       paginationEl.hidden = true;
-      paginationEl.innerHTML = "";
+      paginationEl.innerHTML = '';
       return;
     }
 
@@ -604,21 +696,35 @@
     const pages = paginationPages(page, totalPages, paginationWindow, paginationBoundary);
     const items = pages
       .map((p) => {
-        if (p === null) return `<li class="page-dots" aria-hidden="true">&hellip;</li>`;
-        if (p === page) return `<li><a href="${pageHref(p)}" class="page-num is-current" aria-current="page">${p}</a></li>`;
+        if (p === null) {
+          return `<li class="page-dots" aria-hidden="true">&hellip;</li>`;
+        }
+        if (p === page) {
+          return `<li><a href="${pageHref(p)}" class="page-num is-current" aria-current="page">${p}</a></li>`;
+        }
         return `<li><a href="${pageHref(p)}" class="page-num" data-filter-page="${p}">${p}</a></li>`;
       })
-      .join("");
+      .join('');
 
     paginationEl.innerHTML = `<nav class="pagination" aria-label="Stránkování">${prevBtn}<ul class="page-list">${items}</ul>${nextBtn}</nav>`;
     paginationEl.hidden = false;
 
-    const prev = paginationEl.querySelector("[data-filter-prev]");
-    const next = paginationEl.querySelector("[data-filter-next]");
-    if (prev) prev.addEventListener("click", (e) => { e.preventDefault(); goToPage(currentPage - 1); });
-    if (next) next.addEventListener("click", (e) => { e.preventDefault(); goToPage(currentPage + 1); });
-    paginationEl.querySelectorAll("[data-filter-page]").forEach((a) => {
-      a.addEventListener("click", (e) => {
+    const prev = paginationEl.querySelector('[data-filter-prev]');
+    const next = paginationEl.querySelector('[data-filter-next]');
+    if (prev) {
+      prev.addEventListener('click', (e) => {
+        e.preventDefault();
+        goToPage(currentPage - 1);
+      });
+    }
+    if (next) {
+      next.addEventListener('click', (e) => {
+        e.preventDefault();
+        goToPage(currentPage + 1);
+      });
+    }
+    paginationEl.querySelectorAll('[data-filter-page]').forEach((a) => {
+      a.addEventListener('click', (e) => {
         e.preventDefault();
         goToPage(parseInt(a.dataset.filterPage, 10));
       });
@@ -629,31 +735,33 @@
 
   // Toggle active class on every [data-filter-value] control (pill, checkbox, …).
   function updateFilterStates() {
-    document.querySelectorAll("[data-filter-value][data-filter-dimension]").forEach((el) => {
+    document.querySelectorAll('[data-filter-value][data-filter-dimension]').forEach((el) => {
       const dim = el.dataset.filterDimension;
       const slug = el.dataset.filterValue;
       const active = state.get(dim);
       const isActive = active ? active.has(slug) : false;
-      el.classList.toggle("pill--active", isActive);
-      el.setAttribute("aria-pressed", String(isActive));
+      el.classList.toggle('pill--active', isActive);
+      el.setAttribute('aria-pressed', String(isActive));
     });
   }
 
   // Update count elements.
   function updateFilterCount(filteredCount, totalCount) {
-    document.querySelectorAll("[data-filter-count-filtered]").forEach((el) => {
+    document.querySelectorAll('[data-filter-count-filtered]').forEach((el) => {
       el.textContent = filteredCount;
     });
-    document.querySelectorAll("[data-filter-count-total]").forEach((el) => {
+    document.querySelectorAll('[data-filter-count-total]').forEach((el) => {
       el.textContent = totalCount;
     });
     // Single-element variant: <span data-filter-count>{filtered} z {total}</span>
     // Original text is used as template on first call, then stored in data-filter-count-orig.
-    document.querySelectorAll("[data-filter-count]").forEach((el) => {
-      if (!el.dataset.filterCountOrig) el.dataset.filterCountOrig = el.textContent;
+    document.querySelectorAll('[data-filter-count]').forEach((el) => {
+      if (!el.dataset.filterCountOrig) {
+        el.dataset.filterCountOrig = el.textContent;
+      }
       el.textContent = el.dataset.filterCountOrig
-        .replace("{filtered}", filteredCount)
-        .replace("{total}", totalCount);
+        .replace('{filtered}', filteredCount)
+        .replace('{total}', totalCount);
     });
   }
 
@@ -661,19 +769,19 @@
   // Label is read from the matching [data-filter-value] control in the DOM;
   // falls back to the raw slug if the control element is not found.
   function updateActiveList() {
-    document.querySelectorAll("[data-filter-active-list]").forEach((container) => {
-      container.innerHTML = "";
+    document.querySelectorAll('[data-filter-active-list]').forEach((container) => {
+      container.innerHTML = '';
       for (const [dim, values] of state) {
         for (const slug of values) {
           const controlEl = document.querySelector(
             `[data-filter-value="${CSS.escape(slug)}"][data-filter-dimension="${CSS.escape(dim)}"]`
           );
           const label = controlEl ? controlEl.textContent.trim() : slug;
-          const chip = document.createElement("button");
-          chip.type = "button";
-          chip.className = "filter-chip";
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'filter-chip';
           chip.textContent = label;
-          chip.addEventListener("click", () => removeFilterValue(dim, slug));
+          chip.addEventListener('click', () => removeFilterValue(dim, slug));
           container.appendChild(chip);
         }
       }
@@ -684,7 +792,9 @@
     const active = state.get(dim);
     if (active) {
       active.delete(slug);
-      if (active.size === 0) state.delete(dim);
+      if (active.size === 0) {
+        state.delete(dim);
+      }
     }
     currentPage = 1;
     updateUrl();
@@ -694,16 +804,16 @@
   // Show [data-filter-clear] only when at least one filter is active.
   function updateClearButton() {
     const hasActive = state.size > 0;
-    document.querySelectorAll("[data-filter-clear]").forEach((el) => {
+    document.querySelectorAll('[data-filter-clear]').forEach((el) => {
       el.hidden = !hasActive;
     });
   }
 
   function attachClearListeners() {
     // Event delegation handles both static and dynamically inserted clear buttons.
-    document.addEventListener("click", (e) => {
+    document.addEventListener('click', (e) => {
       // [data-filter-clear] — clear all active filters
-      if (e.target.closest("[data-filter-clear]") && !e.target.closest("[data-filter-clear-dim]")) {
+      if (e.target.closest('[data-filter-clear]') && !e.target.closest('[data-filter-clear-dim]')) {
         e.preventDefault();
         state.clear();
         currentPage = 1;
@@ -712,7 +822,7 @@
         return;
       }
       // [data-filter-clear-dim="dim"] — clear one dimension (e.g. combobox trigger ×)
-      const dimBtn = e.target.closest("[data-filter-clear-dim]");
+      const dimBtn = e.target.closest('[data-filter-clear-dim]');
       if (dimBtn) {
         e.preventDefault();
         e.stopPropagation();
@@ -729,11 +839,13 @@
   const TEXT_DEBOUNCE_MS = 200;
 
   function attachTextListeners() {
-    document.querySelectorAll("[data-filter-text-dimension]").forEach((input) => {
+    document.querySelectorAll('[data-filter-text-dimension]').forEach((input) => {
       const dim = input.dataset.filterTextDimension;
-      if (!dimensions[dim] || dimensions[dim].type !== "text") return;
+      if (!dimensions[dim] || dimensions[dim].type !== 'text') {
+        return;
+      }
       let timer = null;
-      input.addEventListener("input", () => {
+      input.addEventListener('input', () => {
         // Immediate feedback for × button visibility (before debounce).
         updateTextClearVisibility(input);
         clearTimeout(timer);
@@ -756,10 +868,10 @@
   // Reflect URL state back into text inputs (popstate / initial load).
   // Skip inputs currently focused so we never overwrite what the user is typing.
   function syncTextInputs() {
-    document.querySelectorAll("[data-filter-text-dimension]").forEach((input) => {
+    document.querySelectorAll('[data-filter-text-dimension]').forEach((input) => {
       const dim = input.dataset.filterTextDimension;
       const active = state.get(dim);
-      const val = (active && active.size > 0) ? [...active][0] : "";
+      const val = active && active.size > 0 ? [...active][0] : '';
       if (document.activeElement !== input && input.value !== val) {
         input.value = val;
       }
@@ -771,10 +883,12 @@
   // text input — visible only when the input has a non-empty value.
   function updateTextClearVisibility(input) {
     const dim = input.dataset.filterTextDimension;
-    if (!dim) return;
-    const hasValue = input.value.trim() !== "";
-    document.querySelectorAll(
-      `[data-filter-clear-dim="${CSS.escape(dim)}"]`
-    ).forEach((btn) => { btn.hidden = !hasValue; });
+    if (!dim) {
+      return;
+    }
+    const hasValue = input.value.trim() !== '';
+    document.querySelectorAll(`[data-filter-clear-dim="${CSS.escape(dim)}"]`).forEach((btn) => {
+      btn.hidden = !hasValue;
+    });
   }
 })();
