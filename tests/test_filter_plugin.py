@@ -1,6 +1,9 @@
 """Tests for krizky-filters plugin."""
 
+import contextlib
+import copy
 import json
+import logging
 import sqlite3
 from pathlib import Path
 
@@ -457,6 +460,130 @@ def test_extra_template_vars_text_dim(conn):
     assert q_dim["type"] == "text"
     assert q_dim["label"] == "Hledat"
     assert q_dim["values"] == []
+
+
+# ── plugin.py — config warnings ──────────────────────────────────────────────
+
+
+def _run_extra_vars(conn, config, caplog):
+    caplog.set_level(logging.WARNING, logger="krizky_filters.plugin")
+    FiltersPlugin().extra_template_vars(config=config, config_dir=Path("."), conn=conn)
+    return [r for r in caplog.records if r.name == "krizky_filters.plugin"]
+
+
+def _config_with(minimal_config, **filters_override):
+    config = copy.deepcopy(minimal_config)
+    config["site"]["pages"]["vsechna_mista"]["filters"].update(filters_override)
+    return config
+
+
+def test_no_warnings_for_valid_config(conn, minimal_config, caplog):
+    assert _run_extra_vars(conn, minimal_config, caplog) == []
+
+
+def test_no_warnings_for_valid_text_dim(conn, caplog):
+    config = {
+        "sources": {"tables": {"mista": {"main": True}}},
+        "site": {
+            "pages": {
+                "search_page": {
+                    "filters": {
+                        "dimensions": {
+                            "q": {"label": "H", "type": "text", "search_fields": ["nazev"]},
+                        },
+                    },
+                },
+            },
+        },
+    }
+    assert _run_extra_vars(conn, config, caplog) == []
+
+
+def test_warning_unknown_dimension_type(conn, minimal_config, caplog):
+    dims = {"typ": {"label": "Typ", "type": "radio"}}
+    config = _config_with(minimal_config, dimensions=dims)
+    records = _run_extra_vars(conn, config, caplog)
+    assert len(records) == 1
+    msg = records[0].getMessage()
+    assert "vsechna_mista" in msg
+    assert "typ" in msg
+    assert "radio" in msg
+
+
+@pytest.mark.parametrize("search_fields", [None, []])
+def test_warning_text_dim_without_search_fields(conn, minimal_config, caplog, search_fields):
+    dim = {"label": "Hledat", "type": "text"}
+    if search_fields is not None:
+        dim["search_fields"] = search_fields
+    config = _config_with(minimal_config, dimensions={"q": dim})
+    records = _run_extra_vars(conn, config, caplog)
+    assert len(records) == 1
+    msg = records[0].getMessage()
+    assert "vsechna_mista" in msg
+    assert "'q'" in msg
+
+
+@pytest.mark.parametrize(
+    "sort",
+    [
+        "bogus",
+        "-count,nope",
+        {"order": ["kriz"], "fallback": "bogus"},
+        {"fallback": "count"},
+    ],
+)
+def test_warning_invalid_sort(conn, minimal_config, caplog, sort):
+    dims = {"typ": {"label": "Typ", "type": "select", "sort": sort}}
+    config = _config_with(minimal_config, dimensions=dims)
+    caplog.set_level(logging.WARNING, logger="krizky_filters.plugin")
+    # Invalid sort already fails today; only the warning is checked here.
+    with contextlib.suppress(ValueError, AttributeError):
+        FiltersPlugin().extra_template_vars(config=config, config_dir=Path("."), conn=conn)
+    records = [r for r in caplog.records if r.name == "krizky_filters.plugin"]
+    assert len(records) == 1
+    msg = records[0].getMessage()
+    assert "vsechna_mista" in msg
+    assert "typ" in msg
+
+
+@pytest.mark.parametrize(
+    "sort",
+    ["alpha", "-count,alpha", {"order": ["kriz"], "fallback": "-alpha"}, {"order": ["kriz"]}],
+)
+def test_no_warning_for_valid_sort(conn, minimal_config, caplog, sort):
+    dims = {"typ": {"label": "Typ", "type": "select", "sort": sort}}
+    config = _config_with(minimal_config, dimensions=dims)
+    assert _run_extra_vars(conn, config, caplog) == []
+
+
+def test_warning_invalid_sort_ignored_for_text_dim(conn, minimal_config, caplog):
+    dims = {"q": {"label": "H", "type": "text", "search_fields": ["nazev"], "sort": "bogus"}}
+    config = _config_with(minimal_config, dimensions=dims)
+    assert _run_extra_vars(conn, config, caplog) == []
+
+
+def test_warning_unknown_facets_mode(conn, minimal_config, caplog):
+    config = _config_with(minimal_config, facets_mode="dim")
+    records = _run_extra_vars(conn, config, caplog)
+    assert len(records) == 1
+    msg = records[0].getMessage()
+    assert "vsechna_mista" in msg
+    assert "dim" in msg
+
+
+@pytest.mark.parametrize("mode", ["hide", "disable"])
+def test_no_warning_for_valid_facets_mode(conn, minimal_config, caplog, mode):
+    config = _config_with(minimal_config, facets_mode=mode)
+    assert _run_extra_vars(conn, config, caplog) == []
+
+
+@pytest.mark.parametrize("filters_cfg", [{}, {"dimensions": {}}])
+def test_warning_filters_without_dimensions(conn, minimal_config, caplog, filters_cfg):
+    config = copy.deepcopy(minimal_config)
+    config["site"]["pages"]["vsechna_mista"]["filters"] = filters_cfg
+    records = _run_extra_vars(conn, config, caplog)
+    assert len(records) == 1
+    assert "vsechna_mista" in records[0].getMessage()
 
 
 # ── plugin.py — _resolve_url_template ────────────────────────────────────────
