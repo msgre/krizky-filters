@@ -2,14 +2,14 @@
 id: "02"
 slug: config-warnings
 title: Logger a varování při chybné konfiguraci filtrů
-status: pending
+status: done
 depends_on: ["01"]
 files:
   - krizky_filters/plugin.py
   - tests/test_filter_plugin.py
   - docs/configuration.md
-attempts: 0
-pr: ""
+attempts: 2
+pr: "3"
 ---
 
 ## Cíl
