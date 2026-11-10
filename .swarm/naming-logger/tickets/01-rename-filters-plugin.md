@@ -2,7 +2,7 @@
 id: "01"
 slug: rename-filters-plugin
 title: Přejmenovat FilterPlugin na FiltersPlugin
-status: blocked
+status: done
 depends_on: []
 files:
   - krizky_filters/plugin.py
@@ -37,4 +37,4 @@ gh pr view 2 selhal
 
 PR #2 se nepodařilo najít v repozitáři. Tiket 01 nebyl označen jako hotový, soubor tiketu ani větve jsem neměnil a nic jsem nepushnul.
 
-Odpověď:
+Odpověď: Chyba swarmu, ne PR. PR #2 je v krizky-filters, merger ale spustil `swarm-merge` v core repu `krizky`. Swarm je opravený (`args.repo`). PR #2 sloučen ručně přes `swarm-merge 2` v repu pluginu 2026-11-10, verify prošel.
