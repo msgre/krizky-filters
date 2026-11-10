@@ -1,6 +1,5 @@
 """Tests for krizky-filters plugin."""
 
-import contextlib
 import copy
 import json
 import logging
@@ -524,20 +523,20 @@ def test_warning_text_dim_without_search_fields(conn, minimal_config, caplog, se
 
 
 @pytest.mark.parametrize(
-    "sort",
+    ("sort", "expected"),
     [
-        "bogus",
-        "-count,nope",
-        {"order": ["kriz"], "fallback": "bogus"},
-        {"fallback": "count"},
+        ("bogus", ValueError),
+        ("-count,nope", ValueError),
+        ({"order": ["kriz"], "fallback": "bogus"}, ValueError),
+        ({"fallback": "count"}, AttributeError),
     ],
 )
-def test_warning_invalid_sort(conn, minimal_config, caplog, sort):
+def test_warning_invalid_sort(conn, minimal_config, caplog, sort, expected):
     dims = {"typ": {"label": "Typ", "type": "select", "sort": sort}}
     config = _config_with(minimal_config, dimensions=dims)
     caplog.set_level(logging.WARNING, logger="krizky_filters.plugin")
-    # Invalid sort already fails today; only the warning is checked here.
-    with contextlib.suppress(ValueError, AttributeError):
+    # Invalid sort fails the build today; the warning must not change that.
+    with pytest.raises(expected):
         FiltersPlugin().extra_template_vars(config=config, config_dir=Path("."), conn=conn)
     records = [r for r in caplog.records if r.name == "krizky_filters.plugin"]
     assert len(records) == 1
@@ -548,7 +547,14 @@ def test_warning_invalid_sort(conn, minimal_config, caplog, sort):
 
 @pytest.mark.parametrize(
     "sort",
-    ["alpha", "-count,alpha", {"order": ["kriz"], "fallback": "-alpha"}, {"order": ["kriz"]}],
+    [
+        None,
+        "alpha",
+        "-count,alpha",
+        {"order": ["kriz"], "fallback": "-alpha"},
+        {"order": ["kriz"]},
+        {"order": ["kriz"], "fallback": None},
+    ],
 )
 def test_no_warning_for_valid_sort(conn, minimal_config, caplog, sort):
     dims = {"typ": {"label": "Typ", "type": "select", "sort": sort}}

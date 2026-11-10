@@ -32,7 +32,12 @@ def _iter_dimensions(filters_cfg: dict):
 
 
 def _sort_spec_valid(spec) -> bool:
-    """Return True if ``spec`` is a string sort spec accepted by the value sorter."""
+    """Return True if ``spec`` is a sort spec accepted by the value sorter.
+
+    ``None`` is valid: the build treats it as the default ``count``.
+    """
+    if spec is None:
+        return True
     if not isinstance(spec, str):
         return False
     try:
