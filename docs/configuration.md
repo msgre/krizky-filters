@@ -293,6 +293,16 @@ Vlastnosti přepočtu:
 
 Viz [javascript.md](javascript.md#facets) pro detaily JS API.
 
+## Varování při chybné konfiguraci
+
+Plugin při chybné konfiguraci filtrů varuje v logu buildu (`WARNING`, jednou za build, zpráva obsahuje název stránky a u dimenzí i jejich klíč). Build se kvůli varování nezastaví ani nezmění. Kontrolované případy:
+
+1. dimenze má `type` jiný než `select`, `multiselect` nebo `text`,
+2. dimenze `type: text` nemá `search_fields` nebo je seznam prázdný,
+3. `sort` obsahuje neznámý preset nebo sloupec (u dict tvaru chybí `order` nebo je neplatný `fallback`),
+4. `facets_mode` není `hide` ani `disable`,
+5. stránka má `filters:`, ale žádnou dimenzi.
+
 ## Kontext fotek
 
 Plugin využívá existující foto konfiguraci `sources.photos.base_url` pro sestavování URL thumbnailů v JS-renderovaných kartách. Nemusíš nic konfigurovat navíc — stačí, aby projekt měl fotky nastavené standardní krizky konvencí (číslo řádku, `{padded_id}_{size}.{format}`).

@@ -1,6 +1,7 @@
 """krizky-filters plugin — in-browser filtering via progressive enhancement."""
 
 import json
+import logging
 import shutil
 from pathlib import Path, PurePosixPath
 
@@ -9,7 +10,12 @@ from krizky.hooks import hookimpl
 from krizky.render import render_config_str
 
 from krizky_filters.json_gen import generate_filter_json
-from krizky_filters.values import fetch_filter_values
+from krizky_filters.values import _parse_sort, fetch_filter_values
+
+_log = logging.getLogger(__name__)
+
+_DIM_TYPES = ("select", "multiselect", "text")
+_FACETS_MODES = ("hide", "disable")
 
 _PLUGIN_TEMPLATES = Path(__file__).parent / "templates"
 _PLUGIN_ASSETS = Path(__file__).parent / "assets"
@@ -23,6 +29,78 @@ def _get_main_table(config: dict) -> str:
 def _iter_dimensions(filters_cfg: dict):
     """Yield (dim_key, dim_cfg) from filters.dimensions."""
     yield from filters_cfg.get("dimensions", {}).items()
+
+
+def _sort_spec_valid(spec) -> bool:
+    """Return True if ``spec`` is a sort spec accepted by the value sorter.
+
+    ``None`` is valid: the build treats it as the default ``count``.
+    """
+    if spec is None:
+        return True
+    if not isinstance(spec, str):
+        return False
+    try:
+        _parse_sort(spec)
+    except ValueError:
+        return False
+    return True
+
+
+def _sort_is_valid(sort) -> bool:
+    """Return True if ``sort`` is a valid string or ``{order, fallback}`` dict."""
+    if isinstance(sort, dict):
+        return "order" in sort and _sort_spec_valid(sort.get("fallback", "count"))
+    return _sort_spec_valid(sort)
+
+
+def _warn_invalid_filters(page_name: str, filters_cfg: dict) -> None:
+    """Log a warning for each misconfiguration found in a page's ``filters`` config.
+
+    Args:
+        page_name: Key of the page in ``site.pages``.
+        filters_cfg: The page's ``filters`` config.
+    """
+    dimensions = filters_cfg.get("dimensions")
+    if not dimensions:
+        _log.warning(
+            "Filters on page '%s': no dimensions are configured; filters will not work",
+            page_name,
+        )
+    facets_mode = filters_cfg.get("facets_mode")
+    if facets_mode is not None and facets_mode not in _FACETS_MODES:
+        _log.warning(
+            "Filters on page '%s': unknown facets_mode '%s'; expected hide or disable",
+            page_name,
+            facets_mode,
+        )
+    for dim_key, dim_cfg in _iter_dimensions(filters_cfg):
+        dim_type = dim_cfg.get("type", "multiselect")
+        if dim_type not in _DIM_TYPES:
+            _log.warning(
+                "Filters on page '%s': dimension '%s' has unknown type '%s'; "
+                "expected select, multiselect or text",
+                page_name,
+                dim_key,
+                dim_type,
+            )
+        elif dim_type == "text":
+            if not dim_cfg.get("search_fields"):
+                _log.warning(
+                    "Filters on page '%s': text dimension '%s' has no search_fields; "
+                    "search will find nothing",
+                    page_name,
+                    dim_key,
+                )
+        elif "sort" in dim_cfg and not _sort_is_valid(dim_cfg["sort"]):
+            _log.warning(
+                "Filters on page '%s': dimension '%s' has invalid sort '%s'; "
+                "expected count, alpha, columns like '-count,alpha' "
+                "or {order: [...], fallback: ...}",
+                page_name,
+                dim_key,
+                dim_cfg["sort"],
+            )
 
 
 def _resolve_url_template(config: dict, dim_key: str, dim_cfg: dict) -> str:
@@ -88,7 +166,7 @@ def _build_filter_config(page_cfg: dict, config: dict) -> dict:
     }
 
 
-class FilterPlugin:
+class FiltersPlugin:
     def __init__(self) -> None:
         self._assets_copied: set[str] = set()
 
@@ -120,6 +198,7 @@ class FilterPlugin:
             if "filters" not in page_cfg:
                 continue
             filters_cfg = page_cfg["filters"]
+            _warn_invalid_filters(page_name, filters_cfg)
             dims: dict = {}
             for dim_key, dim_cfg in _iter_dimensions(filters_cfg):
                 if dim_cfg.get("type") == "text":
@@ -181,4 +260,4 @@ class FilterPlugin:
         self._assets_copied.add(key)
 
 
-plugin = FilterPlugin()
+plugin = FiltersPlugin()
