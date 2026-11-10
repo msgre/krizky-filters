@@ -88,7 +88,7 @@ def _build_filter_config(page_cfg: dict, config: dict) -> dict:
     }
 
 
-class FilterPlugin:
+class FiltersPlugin:
     def __init__(self) -> None:
         self._assets_copied: set[str] = set()
 
@@ -181,4 +181,4 @@ class FilterPlugin:
         self._assets_copied.add(key)
 
 
-plugin = FilterPlugin()
+plugin = FiltersPlugin()
