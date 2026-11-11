@@ -2,13 +2,13 @@
 id: "02"
 slug: js-filter-class-lifecycle
 title: filters.js odebírá třídu filter-js při selhání a zachová text napsaný před načtením
-status: pending
+status: done
 depends_on: []
 files:
   - krizky_filters/assets/krizky-filters/filters.js
   - docs/javascript.md
-attempts: 0
-pr: ""
+attempts: 1
+pr: "5"
 ---
 
 ## Cíl
