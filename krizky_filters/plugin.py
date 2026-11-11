@@ -207,6 +207,7 @@ class FiltersPlugin:
                         "label": dim_cfg["label"],
                         "type": "text",
                         "values": [],
+                        "js_only": True,
                     }
                     continue
                 url_template = _resolve_url_template(config, dim_key, dim_cfg)
@@ -215,6 +216,7 @@ class FiltersPlugin:
                     "type": dim_cfg.get("type", "multiselect"),
                     "many": dim_cfg.get("many", False),
                     "values": fetch_filter_values(conn, main_table, dim_key, dim_cfg, url_template),
+                    "js_only": not url_template,
                 }
             # _card_template is consumed by _filter_card_template.html
             dims["_card_template"] = filters_cfg.get("card_template")
@@ -224,10 +226,13 @@ class FiltersPlugin:
 
     @hookimpl
     def inject_head(self, page_cfg, config):
-        """Return CSS link tag for pages with filters:."""
+        """Return CSS link and inline ``filter-js`` class script for pages with filters:."""
         if "filters" not in page_cfg:
             return None
-        return '<link rel="stylesheet" href="/krizky-filters/filters.css">'
+        return (
+            '<link rel="stylesheet" href="/krizky-filters/filters.css">\n'
+            "<script>document.documentElement.classList.add('filter-js')</script>"
+        )
 
     @hookimpl
     def inject_body_end(self, page_cfg, config):

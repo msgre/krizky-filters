@@ -4,6 +4,8 @@ Plugin pro [krizky](https://github.com/…/krizky) přidávající multidimenzio
 
 Bez JavaScriptu zůstává web plně funkční — pill-tlačítka jsou obyčejné `<a href>` odkazy na statické category stránky. S JavaScriptem se navigace intercepuje, filtry se aplikují in-browser nad odlehčeným JSON souborem, výsledky se překreslují klonováním `<template>` tagu a stav filtrů se ukládá do URL.
 
+Ovládání, které bez JS nemá smysl (textové hledání a volby bez URL kategorie), se bez JS nezobrazí. Prvky s atributem `data-filter-js-only` se zobrazí až po nastavení třídy `filter-js` na `<html>`.
+
 ## Klíčové vlastnosti
 
 - **AND mezi dimenzemi, OR uvnitř dimenze** — kombinace více dimenzí (typ AND datace AND štítek) a více hodnot v rámci dimenze (baroko OR hřbitov)

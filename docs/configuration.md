@@ -104,7 +104,7 @@ URL šablona s `{slug}` placeholderem — použije se jako `href` na pill/checkb
 - S JS: `href` zůstává platný pro middle-click / open-in-new-tab
 - SEO: crawler najde odkazy na category stránky
 
-Pokud není uveden, plugin **automaticky** hledá matching category stránku v `pages:` (viz [Auto-detekce URL](#auto-detekce-url) níže). Pokud nic nenajde, pill nemá `href` (jen `#`).
+Pokud není uveden, plugin **automaticky** hledá matching category stránku v `pages:` (viz [Auto-detekce URL](#auto-detekce-url) níže). Pokud nic nenajde, pill nemá `href` (jen `#`) a dimenze se bez JS nezobrazí (viz [widgets.md](widgets.md)).
 
 ## Sortování
 

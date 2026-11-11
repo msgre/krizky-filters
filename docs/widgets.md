@@ -23,7 +23,8 @@ Kontext, který má šablona k dispozici:
 |---|---|---|
 | `_dim_key` | string | Název dimenze (např. `typ`, `stitky`) |
 | `_dim.label` | string | Label z configu |
-| `_dim.type` | string | `select` \| `multiselect` |
+| `_dim.type` | string | `select` \| `multiselect` \| `text` |
+| `_dim.js_only` | bool | `true` pro `text` a pro select/multiselect bez URL šablony (ovládání nefunguje bez JS) |
 | `_dim.many` | bool | Zda je sloupec JSON pole |
 | `_dim["values"]` | list | Seznam hodnot |
 | `_dim["values"][i].value` | string | Zobrazovaná hodnota (např. „Kříž") |
@@ -34,6 +35,28 @@ Kontext, který má šablona k dispozici:
 Pořadí `_dim["values"]` je určeno klíčem `sort` v configu dimenze (default: count DESC, alpha ASC tiebreaker). Podrobnosti [configuration.md#sortování](configuration.md#sortování).
 
 > **Pozor:** `values` je klíč slovníku, ne atribut, protože `_dim.values` v Jinja2 koliduje s built-in `.values()` metodou dict. Vždy `_dim["values"]`.
+
+## Ovládání jen pro JS (`data-filter-js-only`)
+
+Prvek s atributem `data-filter-js-only` se zobrazí jen tehdy, když JS běží a filtrování se podařilo oživit. Funguje to takto:
+
+- `inject_head` vloží na stránky s `filters:` inline skript `document.documentElement.classList.add('filter-js')`, takže třída `filter-js` je na `<html>` dřív, než se vykreslí `<body>` (ovládání nenaskakuje).
+- `filters.css` skrývá `html:not(.filter-js) [data-filter-js-only]` přes `display: none`.
+- `filters.js` třídu `filter-js` odebere, když filtrování neoživí (chybí nebo je vadný `#filter-config`, chybí mřížka, nebo selže načtení JSONu). Ovládání se pak skryje a stránka zůstane ve statické podobě. Viz [javascript.md](javascript.md).
+
+Výchozí `_filter_widget.html` dává atribut na `.filter-dimension`, když má dimenze `_dim.js_only`, a na obal `[data-filter-widget]`, když mají `js_only` všechny dimenze stránky.
+
+**Použití v přebité šabloně:**
+
+```jinja2
+<div class="my-dim"{% if _dim.js_only %} data-filter-js-only{% endif %}>
+  ...
+</div>
+```
+
+Atribut lze dát na libovolný prvek, i mimo dimenze (např. tlačítko „Vymazat vše“).
+
+**Známé omezení:** když se inline skript spustí, ale `filters.js` se nenačte (např. 404 po chybném nasazení), ovládání zůstane vidět a nebude fungovat.
 
 ## Přidat nový typ widgetu
 

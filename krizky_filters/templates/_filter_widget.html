@@ -1,9 +1,17 @@
 {% if page_name in page_filters %}
 {% set _dims = page_filters[page_name] %}
-<div class="filter-widget" data-filter-widget>
+{#- Wrapper is JS-only when every dimension is JS-only. A page without dimensions
+    gets no attribute (an empty widget controls nothing, so either choice is fine). -#}
+{% set _all_js_only = namespace(value=false, seen=false) %}
+{% set _all_js_only.value = true %}
+{% for _dim_key, _dim in _dims.items() if not _dim_key.startswith('_') %}
+  {% set _all_js_only.seen = true %}
+  {% if not _dim.js_only %}{% set _all_js_only.value = false %}{% endif %}
+{% endfor %}
+<div class="filter-widget" data-filter-widget{% if _all_js_only.seen and _all_js_only.value %} data-filter-js-only{% endif %}>
   <div class="filter-dimensions">
     {% for _dim_key, _dim in _dims.items() if not _dim_key.startswith('_') %}
-    <div class="filter-dimension" data-dimension="{{ _dim_key }}" data-type="{{ _dim.type }}">
+    <div class="filter-dimension" data-dimension="{{ _dim_key }}" data-type="{{ _dim.type }}"{% if _dim.js_only %} data-filter-js-only{% endif %}>
       <span class="filter-label">{{ _dim.label }}</span>
       {% include "_filter_widget_" ~ _dim.type ~ ".html" %}
     </div>

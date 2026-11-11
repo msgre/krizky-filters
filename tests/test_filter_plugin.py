@@ -3,10 +3,12 @@
 import copy
 import json
 import logging
+import re
 import sqlite3
 from pathlib import Path
 
 import pytest
+from jinja2 import Environment, FileSystemLoader
 
 from krizky_filters.json_gen import generate_filter_json
 from krizky_filters.plugin import FiltersPlugin, _build_filter_config, _resolve_url_template
@@ -654,6 +656,8 @@ def test_inject_head_with_filters(minimal_config):
     assert result is not None
     assert "filters.css" in result
     assert "<link" in result
+    assert "<script>" in result
+    assert "classList.add('filter-js')" in result
 
 
 def test_inject_head_without_filters(minimal_config):
@@ -833,3 +837,86 @@ def test_after_page_written_skips_no_filters(tmp_path, minimal_config):
     )
     assert not (tmp_path / "krizky-filters").exists()
     assert not (tmp_path / "jsons").exists()
+
+
+# ── js_only + vykreslení šablon ───────────────────────────────────────────────
+
+
+def _js_only_config(typ_dim: dict, with_category_page: bool = False) -> dict:
+    pages: dict = {
+        "mista": {
+            "path": "/mista.html",
+            "filters": {
+                "dimensions": {
+                    "q": {"label": "Hledat", "type": "text", "search_fields": ["nazev"]},
+                    "typ": {"label": "Typ", **typ_dim},
+                },
+            },
+        },
+    }
+    if with_category_page:
+        pages["typ_page"] = {"path": "/typ/{{ category.slug }}.html", "category": "typ"}
+    return {"sources": {"tables": {"mista": {"main": True}}}, "site": {"pages": pages}}
+
+
+def _page_filters(conn, config: dict) -> dict:
+    result = FiltersPlugin().extra_template_vars(config=config, config_dir=Path("."), conn=conn)
+    return result["page_filters"]
+
+
+@pytest.mark.parametrize("dim_type", ["select", "multiselect"])
+def test_js_only_flags(conn, dim_type):
+    pf = _page_filters(conn, _js_only_config({"type": dim_type, "url": "/typ/{slug}.html"}))
+    assert pf["mista"]["q"]["js_only"] is True
+    assert pf["mista"]["typ"]["js_only"] is False
+
+    pf = _page_filters(conn, _js_only_config({"type": dim_type}, with_category_page=True))
+    assert pf["mista"]["typ"]["js_only"] is False
+
+    pf = _page_filters(conn, _js_only_config({"type": dim_type}))
+    assert pf["mista"]["typ"]["js_only"] is True
+
+
+def test_card_template_has_no_js_only(conn):
+    pf = _page_filters(conn, _js_only_config({"type": "select"}))
+    assert pf["mista"]["_card_template"] is None
+
+
+_TEMPLATES = Path(__file__).parent.parent / "krizky_filters" / "templates"
+
+
+def _render(conn, config: dict, template: str = "_filter_widget.html") -> str:
+    env = Environment(loader=FileSystemLoader(str(_TEMPLATES)), autoescape=True)
+    pf = _page_filters(conn, config)
+    return env.get_template(template).render(page_name="mista", page_filters=pf)
+
+
+def _tag(html: str, marker: str) -> str:
+    """Return the opening tag containing ``marker``."""
+    m = re.search(r"<[^<>]*" + re.escape(marker) + r"[^<>]*>", html)
+    assert m, f"{marker} not found"
+    return m.group(0)
+
+
+@pytest.mark.parametrize("dim_type", ["select", "multiselect"])
+def test_render_option_hrefs(conn, dim_type):
+    html = _render(conn, _js_only_config({"type": dim_type, "url": "/typ/{slug}.html"}))
+    assert 'href="/typ/kriz.html"' in html
+    assert 'href="#"' not in html
+    html = _render(conn, _js_only_config({"type": dim_type}))
+    assert 'href="#"' in html
+    assert "/typ/kriz.html" not in html
+
+
+def test_render_js_only_attributes_mixed(conn):
+    html = _render(conn, _js_only_config({"type": "select", "url": "/typ/{slug}.html"}))
+    assert "data-filter-js-only" in _tag(html, 'data-dimension="q"')
+    assert "data-filter-js-only" not in _tag(html, 'data-dimension="typ"')
+    assert "data-filter-js-only" not in _tag(html, "data-filter-widget")
+
+
+def test_render_js_only_attributes_all_js_only(conn):
+    html = _render(conn, _js_only_config({"type": "multiselect"}))
+    assert "data-filter-js-only" in _tag(html, 'data-dimension="q"')
+    assert "data-filter-js-only" in _tag(html, 'data-dimension="typ"')
+    assert "data-filter-js-only" in _tag(html, "data-filter-widget")
