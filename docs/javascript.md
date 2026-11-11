@@ -120,6 +120,22 @@ Všechny hookovací atributy fungují přes **event delegation** nebo přes DOM 
 | `[data-filter-clear]` | Click → vyprázdnit všechny filtry. Element se skryje (`hidden`) když nic není aktivní. |
 | `[data-filter-clear-dim="dim"]` | Click → vymazat jen tu dimenzi. Užitečné pro chip × tlačítko nebo per-dimension clear v combobox triggeru. |
 
+### Zobrazení jen s JS
+
+| Atribut | Chování |
+|---|---|
+| `[data-filter-js-only]` | Prvek je vidět jen dokud má `<html>` třídu `filter-js` (nastavuje ji inline skript v `<head>`, CSS ostatní skryje). `filters.js` třídu odebere, když filtrování neoživí, a stránka se pak chová staticky. |
+
+`filters.js` odebere třídu `filter-js` ve třech případech:
+
+- chybí `#filter-config` nebo jeho obsah nejde naparsovat,
+- na stránce není mřížka (`gridSelector`),
+- selže načtení nebo parsování JSON (včetně výjimky při inicializaci).
+
+Ovládání je vidět hned při vykreslení, takže uživatel může psát do textového hledání ještě před načtením dat. Text z `[data-filter-text-dimension]` inputu, který tam v okamžiku načtení dat je, se po načtení použije: má přednost před hodnotou z URL, nastaví se do filtru a do URL (přes `history.replaceState`, takže nevznikne nový záznam v historii) a zobrazí se tlačítko pro vymazání. Prázdný input hodnotu z URL nepřebíjí.
+
+**Známé omezení:** když se inline skript spustí, ale `filters.js` se vůbec nenačte (např. 404 po chybném nasazení), třídu `filter-js` nikdo neodebere a ovládání zůstane vidět bez funkce.
+
 ### Status výstupy
 
 | Atribut | Chování |
