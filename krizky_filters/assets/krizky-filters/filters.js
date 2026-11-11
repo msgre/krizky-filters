@@ -17,14 +17,25 @@
  *   [data-filter-count-filtered]                shows current filtered record count
  *   [data-filter-count-total]                   shows total record count
  *   [data-filter-count]                         single element with {filtered}/{total} template
+ *   [data-filter-js-only]                       visible only while <html> has class "filter-js"; this
+ *                                               script removes the class when filtering is not activated
  */
 (function () {
   'use strict';
 
   // ── Bootstrap ────────────────────────────────────────────────────────────
 
+  // Class set on <html> by the inline head script; CSS shows [data-filter-js-only]
+  // elements only while it is present. Remove it whenever filtering is not activated.
+  const JS_ONLY_CLASS = 'filter-js';
+
+  function disableJsOnly() {
+    document.documentElement.classList.remove(JS_ONLY_CLASS);
+  }
+
   const configEl = document.getElementById('filter-config');
   if (!configEl) {
+    disableJsOnly();
     return;
   }
 
@@ -32,6 +43,7 @@
   try {
     config = JSON.parse(configEl.textContent);
   } catch {
+    disableJsOnly();
     return;
   }
 
@@ -42,6 +54,7 @@
   const facetsMode = config.facetsMode || 'hide'; // "hide" | "disable"
   const grid = document.querySelector(gridSelector);
   if (!grid) {
+    disableJsOnly();
     return;
   }
 
@@ -62,6 +75,7 @@
         el.hidden = true;
       });
       parseUrlState();
+      adoptTypedText();
       attachFilterListeners();
       attachClearListeners();
       attachTextListeners();
@@ -72,7 +86,8 @@
       filterAndRender();
     })
     .catch(() => {
-      /* silently fall back to static rendering */
+      // Fall back to static rendering: hide the JS-only controls.
+      disableJsOnly();
     });
 
   // ── URL state ─────────────────────────────────────────────────────────────
@@ -863,6 +878,33 @@
       });
       updateTextClearVisibility(input);
     });
+  }
+
+  // Text typed into a search input before the data finished loading wins over
+  // the URL value. Runs after parseUrlState() and before the first render, so
+  // syncTextInputs() cannot overwrite it. The URL is updated with replaceState
+  // (not pushState): the load-time adoption must not add a history entry.
+  function adoptTypedText() {
+    let changed = false;
+    document.querySelectorAll('[data-filter-text-dimension]').forEach((input) => {
+      const dim = input.dataset.filterTextDimension;
+      if (!dimensions[dim] || dimensions[dim].type !== 'text') {
+        return;
+      }
+      const q = input.value.trim();
+      if (!q) {
+        return;
+      }
+      const active = state.get(dim);
+      if (!active || !active.has(q) || active.size !== 1) {
+        state.set(dim, new Set([q]));
+        changed = true;
+      }
+    });
+    if (changed) {
+      currentPage = 1;
+      history.replaceState({}, '', pageHref(currentPage));
+    }
   }
 
   // Reflect URL state back into text inputs (popstate / initial load).
