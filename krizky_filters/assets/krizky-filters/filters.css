@@ -97,3 +97,7 @@
 .filter-clear:hover {
   opacity: 1;
 }
+
+html:not(.filter-js) [data-filter-js-only] {
+  display: none;
+}
