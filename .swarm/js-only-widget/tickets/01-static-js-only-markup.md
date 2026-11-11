@@ -2,7 +2,7 @@
 id: "01"
 slug: static-js-only-markup
 title: Statická strana widgetu – opravené odkazy, js_only, třída filter-js a CSS pravidlo
-status: pending
+status: done
 depends_on: []
 files:
   - krizky_filters/plugin.py
@@ -14,8 +14,8 @@ files:
   - docs/widgets.md
   - docs/configuration.md
   - README.md
-attempts: 0
-pr: ""
+attempts: 1
+pr: "6"
 ---
 
 ## Cíl
