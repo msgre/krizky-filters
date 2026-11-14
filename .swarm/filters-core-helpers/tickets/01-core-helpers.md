@@ -2,7 +2,7 @@
 id: "01"
 slug: core-helpers
 title: Přechod na krizky 0.2 (register_plugin_templates, copy_plugin_assets)
-status: pending
+status: done
 depends_on: []
 files:
   - pyproject.toml
@@ -11,8 +11,8 @@ files:
   - tests/test_filter_plugin.py
   - README.md
   - docs/configuration.md
-attempts: 0
-pr: ""
+attempts: 1
+pr: "8"
 ---
 
 ## Cíl
