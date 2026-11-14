@@ -2,11 +2,10 @@
 
 import json
 import logging
-import shutil
 from pathlib import Path, PurePosixPath
 
-from jinja2 import ChoiceLoader, FileSystemLoader
 from krizky.hooks import hookimpl
+from krizky.plugin_helpers import register_plugin_templates, replace_tree
 from krizky.render import render_config_str
 
 from krizky_filters.json_gen import generate_filter_json
@@ -167,26 +166,15 @@ def _build_filter_config(page_cfg: dict, config: dict) -> dict:
 
 
 class FiltersPlugin:
-    def __init__(self) -> None:
-        self._assets_copied: set[str] = set()
-
     @hookimpl
     def prepare_jinja2_environment(self, env, config, config_dir):
         """Insert plugin templates into the Jinja2 loader chain."""
-        if not isinstance(env.loader, ChoiceLoader):
-            return
-        loaders = env.loader.loaders
-        already = any(
-            isinstance(ldr, FileSystemLoader) and str(_PLUGIN_TEMPLATES) in ldr.searchpath
-            for ldr in loaders
-        )
-        if not already:
-            # After project templates, before built-in krizky templates.
-            env.loader.loaders = [
-                loaders[0],
-                FileSystemLoader(str(_PLUGIN_TEMPLATES)),
-                *loaders[1:],
-            ]
+        register_plugin_templates(env, _PLUGIN_TEMPLATES)
+
+    @hookimpl
+    def copy_plugin_assets(self, output_dir, config, config_dir):
+        """Copy plugin JS/CSS assets to ``<output>/krizky-filters/`` on every build."""
+        replace_tree(_PLUGIN_ASSETS / "krizky-filters", output_dir / "krizky-filters")
 
     @hookimpl
     def extra_template_vars(self, config, config_dir, conn):
@@ -248,21 +236,10 @@ class FiltersPlugin:
 
     @hookimpl
     def after_page_written(self, page_cfg, html_path, output_dir, records, config):
-        """Generate filter JSON and copy plugin assets."""
+        """Generate filter JSON for pages with filters:."""
         if "filters" not in page_cfg:
             return
-        self._copy_assets(output_dir)
         generate_filter_json(page_cfg, records, output_dir, html_path)
-
-    def _copy_assets(self, output_dir: Path) -> None:
-        key = str(output_dir)
-        if key in self._assets_copied:
-            return
-        dst = output_dir / "krizky-filters"
-        if dst.exists():
-            shutil.rmtree(dst)
-        shutil.copytree(_PLUGIN_ASSETS / "krizky-filters", dst)
-        self._assets_copied.add(key)
 
 
 plugin = FiltersPlugin()

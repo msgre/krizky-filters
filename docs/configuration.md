@@ -333,5 +333,5 @@ pages:
 Pro každou stránku s `filters:` plugin vygeneruje:
 
 - `<output>/jsons/<page-stem>-filter.json` — pole záznamů s poli uvedenými v `filters.fields`
-- `<output>/krizky-filters/filters.css` — CSS pluginu (kopírováno idempotentně při každém buildu)
+- `<output>/krizky-filters/filters.css` — CSS pluginu (kopíruje se s přepsáním v každém buildu, i když žádná stránka nemá `filters:`; do HTML se vkládá jen na stránkách s `filters:`)
 - `<output>/krizky-filters/filters.js` — JS pluginu
