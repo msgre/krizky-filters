@@ -7,7 +7,7 @@ name = "krizky-filters"
 version = "0.1.0"
 description = "In-browser multi-dimensional filtering for krizky static sites"
 requires-python = ">=3.12"
-dependencies = ["krizky"]
+dependencies = ["krizky>=0.2"]
 
 [project.entry-points."krizky"]
 krizky_filters = "krizky_filters.plugin:plugin"

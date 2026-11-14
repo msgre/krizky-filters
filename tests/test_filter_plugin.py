@@ -8,7 +8,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 
 from krizky_filters.json_gen import generate_filter_json
 from krizky_filters.plugin import FiltersPlugin, _build_filter_config, _resolve_url_template
@@ -773,39 +773,42 @@ def test_extra_template_vars_auto_detects_url(conn):
 # ── plugin.py — after_page_written ───────────────────────────────────────────
 
 
-def test_after_page_written_copies_assets(tmp_path, minimal_config):
-    p = FiltersPlugin()
+def test_copy_plugin_assets_copies_files(tmp_path, minimal_config):
+    FiltersPlugin().copy_plugin_assets(
+        output_dir=tmp_path, config=minimal_config, config_dir=tmp_path
+    )
+    assert (tmp_path / "krizky-filters" / "filters.js").exists()
+    assert (tmp_path / "krizky-filters" / "filters.css").exists()
+
+
+def test_copy_plugin_assets_removes_stale(tmp_path, minimal_config):
+    stale = tmp_path / "krizky-filters" / "stale.txt"
+    stale.parent.mkdir()
+    stale.write_text("old")
+    FiltersPlugin().copy_plugin_assets(
+        output_dir=tmp_path, config=minimal_config, config_dir=tmp_path
+    )
+    assert not stale.exists()
+    assert (tmp_path / "krizky-filters" / "filters.js").exists()
+
+
+def test_after_page_written_does_not_copy_assets(tmp_path, minimal_config):
     page_cfg = minimal_config["site"]["pages"]["vsechna_mista"]
-    p.after_page_written(
+    FiltersPlugin().after_page_written(
         page_cfg=page_cfg,
         html_path="/vsechna-mista.html",
         output_dir=tmp_path,
         records=[],
         config=minimal_config,
     )
-    assert (tmp_path / "krizky-filters" / "filters.js").exists()
-    assert (tmp_path / "krizky-filters" / "filters.css").exists()
+    assert (tmp_path / "jsons" / "vsechna-mista-filter.json").exists()
+    assert not (tmp_path / "krizky-filters").exists()
 
 
-def test_after_page_written_idempotent(tmp_path, minimal_config):
-    p = FiltersPlugin()
-    page_cfg = minimal_config["site"]["pages"]["vsechna_mista"]
-    # Call twice — must not raise
-    p.after_page_written(
-        page_cfg=page_cfg,
-        html_path="/x.html",
-        output_dir=tmp_path,
-        records=[],
-        config=minimal_config,
-    )
-    p.after_page_written(
-        page_cfg=page_cfg,
-        html_path="/y.html",
-        output_dir=tmp_path,
-        records=[],
-        config=minimal_config,
-    )
-    assert (tmp_path / "krizky-filters" / "filters.js").exists()
+def test_prepare_jinja2_environment_registers_templates(tmp_path, minimal_config):
+    env = Environment(loader=ChoiceLoader([FileSystemLoader(str(tmp_path))]))
+    FiltersPlugin().prepare_jinja2_environment(env, minimal_config, tmp_path)
+    assert env.get_template("_filter_widget.html")
 
 
 def test_after_page_written_generates_json(tmp_path, minimal_config):

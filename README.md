@@ -113,7 +113,8 @@ Plugin implementuje pluggy hooky:
 | `extra_template_vars` | Spočítá `page_filters` dict s hodnotami a metadaty všech dimenzí |
 | `inject_head` | CSS link tag do `<head>` |
 | `inject_body_end` | Filter config JSON + JS script tag před `</body>` |
-| `after_page_written` | Vygeneruje filter JSON, zkopíruje JS/CSS assets do output |
+| `after_page_written` | Vygeneruje filter JSON |
+| `copy_plugin_assets` | Zkopíruje JS/CSS assets do `output/krizky-filters/` (v každém buildu) |
 
 Runtime flow v prohlížeči:
 
