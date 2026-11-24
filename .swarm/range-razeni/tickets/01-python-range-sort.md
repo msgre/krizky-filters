@@ -2,7 +2,7 @@
 id: "01"
 slug: python-range-sort
 title: Python, šablony a dokumentace configu pro dimenzi range a sort_records
-status: pending
+status: done
 depends_on: []
 files:
   - krizky_filters/plugin.py
@@ -14,8 +14,8 @@ files:
   - docs/configuration.md
   - docs/widgets.md
   - README.md
-attempts: 0
-pr: ""
+attempts: 2
+pr: "12"
 ---
 
 ## Cíl
