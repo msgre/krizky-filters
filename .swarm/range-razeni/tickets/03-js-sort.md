@@ -2,14 +2,14 @@
 id: "03"
 slug: js-sort
 title: Řazení záznamů ve filters.js
-status: pending
+status: done
 depends_on: ["02"]
 files:
   - krizky_filters/assets/krizky-filters/filters.js
   - tests/js/sort.test.mjs
   - docs/javascript.md
-attempts: 0
-pr: ""
+attempts: 1
+pr: "13"
 ---
 
 ## Cíl
