@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pure } from './load-filters.mjs';
 
-const { toNumber, parseRangeValue, serializeRange, matchesRange, rangeExtent } = pure;
+const { toNumber, plainNumber, parseRangeValue, serializeRange, matchesRange, rangeExtent } = pure;
+
+const BIG = `1${'0'.repeat(22)}`;
 
 test('toNumber', () => {
   const cases = [
@@ -32,6 +34,12 @@ test('parseRangeValue a serializeRange', () => {
     ['52.5-60', { min: 52.5, max: 60 }, '52.5-60'],
     ['5-3', { min: 3, max: 5 }, '3-5'],
     ['003000000-', { min: 3000000, max: null }, '3000000-'],
+    ['0.0000001-', { min: 1e-7, max: null }, '0.0000001-'],
+    ['0.00000015-0.5', { min: 1.5e-7, max: 0.5 }, '0.00000015-0.5'],
+    [`-${BIG}`, { min: null, max: 1e22 }, `-${BIG}`],
+    [`5-${BIG}`, { min: 5, max: 1e22 }, `5-${BIG}`],
+    [`${'9'.repeat(400)}-`, null, null],
+    [`1-${'9'.repeat(400)}`, null, null],
     ['abc', null, null],
     ['1-2-3', null, null],
     ['-', null, null],
@@ -43,9 +51,28 @@ test('parseRangeValue a serializeRange', () => {
     assert.deepEqual(result, parsed, `parseRangeValue(${JSON.stringify(raw)})`);
     if (parsed) {
       assert.equal(serializeRange(result), serialized);
+      // Kanonický tvar musí projít zpět přes parseRangeValue.
+      assert.deepEqual(parseRangeValue(serialized), parsed, `round trip ${serialized}`);
     }
   }
   assert.equal(serializeRange({ min: null, max: null }), '');
+});
+
+test('plainNumber', () => {
+  const cases = [
+    [0, '0'],
+    [3000000, '3000000'],
+    [52.5, '52.5'],
+    [1e-7, '0.0000001'],
+    [1.5e-7, '0.00000015'],
+    [1e21, `1${'0'.repeat(21)}`],
+    [1e22, BIG],
+    [1.2345e25, `12345${'0'.repeat(21)}`],
+  ];
+  for (const [input, expected] of cases) {
+    assert.equal(plainNumber(input), expected, `plainNumber(${String(input)})`);
+    assert.equal(Number(expected), input);
+  }
 });
 
 test('matchesRange', () => {

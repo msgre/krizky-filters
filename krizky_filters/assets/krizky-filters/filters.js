@@ -32,6 +32,7 @@
   // const/let declared below: the script may end in the bootstrap before them.
   globalThis.krizkyFiltersPure = Object.freeze({
     toNumber,
+    plainNumber,
     parseRangeValue,
     serializeRange,
     matchesRange,
@@ -50,8 +51,28 @@
     return null;
   }
 
+  // Decimal string of a finite number without exponent (1e-7 → "0.0000001",
+  // 1e21 → "1000000000000000000000"), so it survives parseRangeValue.
+  function plainNumber(n) {
+    const s = String(n);
+    const match = /^(-?)(\d)(?:\.(\d+))?e([+-]\d+)$/.exec(s);
+    if (!match) {
+      return s;
+    }
+    const [, sign, lead, frac = '', exp] = match;
+    const digits = lead + frac;
+    const point = 1 + Number(exp); // decimal point position within `digits`
+    if (point <= 0) {
+      return `${sign}0.${'0'.repeat(-point)}${digits}`;
+    }
+    if (point >= digits.length) {
+      return `${sign}${digits}${'0'.repeat(point - digits.length)}`;
+    }
+    return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
+  }
+
   // "3000000-5000000" | "3000000-" | "-5000000" → {min, max}; invalid → null.
-  // Non-negative decimals only; swapped bounds are put in order.
+  // Non-negative finite decimals only; swapped bounds are put in order.
   function parseRangeValue(raw) {
     const match = /^(\d+(?:\.\d+)?)?-(\d+(?:\.\d+)?)?$/.exec(String(raw ?? '').trim());
     if (!match || (match[1] === undefined && match[2] === undefined)) {
@@ -59,6 +80,10 @@
     }
     let min = match[1] === undefined ? null : Number(match[1]);
     let max = match[2] === undefined ? null : Number(match[2]);
+    // Too many digits overflow to Infinity, which has no canonical form.
+    if ((min !== null && !Number.isFinite(min)) || (max !== null && !Number.isFinite(max))) {
+      return null;
+    }
     if (min !== null && max !== null && min > max) {
       [min, max] = [max, min];
     }
@@ -70,7 +95,7 @@
     if (min === null && max === null) {
       return '';
     }
-    return `${min === null ? '' : min}-${max === null ? '' : max}`;
+    return `${min === null ? '' : plainNumber(min)}-${max === null ? '' : plainNumber(max)}`;
   }
 
   // Inclusive bounds; null / missing / non-numeric values do not match.
@@ -1049,6 +1074,11 @@
 
   const RANGE_DEBOUNCE_MS = 300;
 
+  // Dimension whose inputs are being applied right now. Its inputs are the
+  // source of the change, so syncRangeInputs() must not rewrite them with the
+  // canonical state (swapped bounds would destroy what the user is typing).
+  let rangeEditingDim = null;
+
   function rangeInputs(dim) {
     return document.querySelectorAll(
       `[data-filter-range][data-filter-dimension="${CSS.escape(dim)}"]`
@@ -1070,7 +1100,12 @@
     }
     currentPage = 1;
     updateUrl();
-    filterAndRender();
+    rangeEditingDim = dim;
+    try {
+      filterAndRender();
+    } finally {
+      rangeEditingDim = null;
+    }
   }
 
   function attachRangeListeners() {
@@ -1091,15 +1126,19 @@
     });
   }
 
-  // Reflect state into range inputs (popstate / initial load / chip removal).
-  // Skip the focused input so we never overwrite what the user is typing.
+  // Reflect state into range inputs (popstate / initial load / chip removal /
+  // clear). Skip the focused input and the dimension being edited so we never
+  // overwrite what the user is typing.
   function syncRangeInputs() {
     document.querySelectorAll('[data-filter-range][data-filter-dimension]').forEach((input) => {
       const dim = input.dataset.filterDimension;
+      if (dim === rangeEditingDim) {
+        return;
+      }
       const active = state.get(dim);
       const range = active && active.size > 0 ? parseRangeValue([...active][0]) : null;
       const bound = range ? range[input.dataset.filterRange] : null;
-      const val = bound === null || bound === undefined ? '' : String(bound);
+      const val = bound === null || bound === undefined ? '' : plainNumber(bound);
       if (document.activeElement !== input && input.value !== val) {
         input.value = val;
       }
@@ -1119,7 +1158,7 @@
       const extent = rangeExtent(records, dim);
       rangeInputs(dim).forEach((input) => {
         const bound = extent ? extent[input.dataset.filterRange] : null;
-        input.placeholder = bound === null || bound === undefined ? '' : String(bound);
+        input.placeholder = bound === null || bound === undefined ? '' : plainNumber(bound);
       });
     }
   }
