@@ -13,8 +13,12 @@ from krizky_filters.values import _parse_sort, fetch_filter_values
 
 _log = logging.getLogger(__name__)
 
-_DIM_TYPES = ("select", "multiselect", "text")
+_DIM_TYPES = ("select", "multiselect", "text", "range")
 _FACETS_MODES = ("hide", "disable")
+_RANGE_IGNORED_KEYS = ("many", "sort", "search_fields")
+_RANGE_DEFAULT_STEP = "any"
+_SORT_DEFAULT_PARAM = "sort"
+_SORT_DEFAULT_LABEL = "Výchozí řazení"
 
 _PLUGIN_TEMPLATES = Path(__file__).parent / "templates"
 _PLUGIN_ASSETS = Path(__file__).parent / "assets"
@@ -53,6 +57,89 @@ def _sort_is_valid(sort) -> bool:
     return _sort_spec_valid(sort)
 
 
+def _step_valid(step) -> bool:
+    """Return True if ``step`` is ``"any"`` or a positive number (not a bool)."""
+    if step == _RANGE_DEFAULT_STEP:
+        return True
+    return isinstance(step, (int, float)) and not isinstance(step, bool) and step > 0
+
+
+def _range_params(dim_cfg: dict) -> tuple[str, int | float | str]:
+    """Return ``(unit, step)`` of a range dimension, with defaults for invalid values."""
+    unit = dim_cfg.get("unit", "")
+    if not isinstance(unit, str):
+        unit = ""
+    step = dim_cfg.get("step", _RANGE_DEFAULT_STEP)
+    if not _step_valid(step):
+        step = _RANGE_DEFAULT_STEP
+    return unit, step
+
+
+def _sort_records_params(sort_cfg) -> dict:
+    """Normalize a ``sort_records`` config to ``{param, default_label, options}``.
+
+    A non-dict config is treated as empty. Options without ``field`` or ``label``
+    are dropped.
+    """
+    if not isinstance(sort_cfg, dict):
+        sort_cfg = {}
+    options = sort_cfg.get("options")
+    if not isinstance(options, list):
+        options = []
+    return {
+        "param": sort_cfg.get("param", _SORT_DEFAULT_PARAM),
+        "default_label": sort_cfg.get("default_label", _SORT_DEFAULT_LABEL),
+        "options": [
+            {"field": o["field"], "label": o["label"]}
+            for o in options
+            if isinstance(o, dict) and o.get("field") and o.get("label")
+        ],
+    }
+
+
+def _warn_invalid_sort_records(page_name: str, filters_cfg: dict) -> None:
+    """Log a warning for each problem in the page's ``sort_records`` config."""
+    sort_cfg = filters_cfg.get("sort_records")
+    if sort_cfg is None:
+        return
+    if not isinstance(sort_cfg, dict):
+        sort_cfg = {}
+    param = sort_cfg.get("param", _SORT_DEFAULT_PARAM)
+    # Compare by equality, not ``in``: a misconfigured param may be unhashable.
+    if any(param == dim_key for dim_key in filters_cfg.get("dimensions") or {}):
+        _log.warning(
+            "Filters on page '%s': sort_records param '%s' collides with a dimension key",
+            page_name,
+            param,
+        )
+    options = sort_cfg.get("options")
+    if not options or not isinstance(options, list):
+        _log.warning(
+            "Filters on page '%s': sort_records has no options; the select will be empty",
+            page_name,
+        )
+        return
+    fields = filters_cfg.get("fields")
+    for i, option in enumerate(options):
+        option = option if isinstance(option, dict) else {}
+        for key in ("field", "label"):
+            if not option.get(key):
+                _log.warning(
+                    "Filters on page '%s': sort_records option #%d has no %s; it is ignored",
+                    page_name,
+                    i + 1,
+                    key,
+                )
+        field = option.get("field")
+        if field and fields and field not in fields:
+            _log.warning(
+                "Filters on page '%s': sort_records field '%s' is not in filters.fields; "
+                "the field will be missing from the JSON",
+                page_name,
+                field,
+            )
+
+
 def _warn_invalid_filters(page_name: str, filters_cfg: dict) -> None:
     """Log a warning for each misconfiguration found in a page's ``filters`` config.
 
@@ -78,11 +165,36 @@ def _warn_invalid_filters(page_name: str, filters_cfg: dict) -> None:
         if dim_type not in _DIM_TYPES:
             _log.warning(
                 "Filters on page '%s': dimension '%s' has unknown type '%s'; "
-                "expected select, multiselect or text",
+                "expected select, multiselect, text or range",
                 page_name,
                 dim_key,
                 dim_type,
             )
+        elif dim_type == "range":
+            for key in _RANGE_IGNORED_KEYS:
+                if key in dim_cfg:
+                    _log.warning(
+                        "Filters on page '%s': range dimension '%s' ignores key '%s'",
+                        page_name,
+                        dim_key,
+                        key,
+                    )
+            if "step" in dim_cfg and not _step_valid(dim_cfg["step"]):
+                _log.warning(
+                    "Filters on page '%s': range dimension '%s' has invalid step '%s'; "
+                    "expected a positive number or 'any'; using 'any'",
+                    page_name,
+                    dim_key,
+                    dim_cfg["step"],
+                )
+            if "unit" in dim_cfg and not isinstance(dim_cfg["unit"], str):
+                _log.warning(
+                    "Filters on page '%s': range dimension '%s' has invalid unit '%s'; "
+                    "expected a string; using empty unit",
+                    page_name,
+                    dim_key,
+                    dim_cfg["unit"],
+                )
         elif dim_type == "text":
             if not dim_cfg.get("search_fields"):
                 _log.warning(
@@ -100,6 +212,7 @@ def _warn_invalid_filters(page_name: str, filters_cfg: dict) -> None:
                 dim_key,
                 dim_cfg["sort"],
             )
+    _warn_invalid_sort_records(page_name, filters_cfg)
 
 
 def _resolve_url_template(config: dict, dim_key: str, dim_cfg: dict) -> str:
@@ -140,7 +253,9 @@ def _build_filter_config(page_cfg: dict, config: dict) -> dict:
             "label": dim_cfg["label"],
             "type": dim_type,
         }
-        if dim_type == "text":
+        if dim_type == "range":
+            entry["unit"], entry["step"] = _range_params(dim_cfg)
+        elif dim_type == "text":
             # Text dim: JS full-text substring match over listed record fields.
             entry["searchFields"] = list(dim_cfg.get("search_fields", []))
         else:
@@ -148,6 +263,11 @@ def _build_filter_config(page_cfg: dict, config: dict) -> dict:
             if dim_cfg.get("many"):
                 entry["many"] = True
         dimensions[dim_key] = entry
+
+    sort_records = None
+    if filters_cfg.get("sort_records") is not None:
+        params = _sort_records_params(filters_cfg["sort_records"])
+        sort_records = {"param": params["param"], "options": params["options"]}
 
     photos_base_url = config.get("sources", {}).get("photos", {}).get("base_url", "").rstrip("/")
 
@@ -162,6 +282,7 @@ def _build_filter_config(page_cfg: dict, config: dict) -> dict:
         "facets": bool(filters_cfg.get("facets", False)),
         "facetsMode": filters_cfg.get("facets_mode", "hide"),
         "dimensions": dimensions,
+        "sortRecords": sort_records,
     }
 
 
@@ -198,6 +319,18 @@ class FiltersPlugin:
                         "js_only": True,
                     }
                     continue
+                if dim_cfg.get("type") == "range":
+                    # Range dim: JS computes min/max from the JSON; no values here.
+                    unit, step = _range_params(dim_cfg)
+                    dims[dim_key] = {
+                        "label": dim_cfg["label"],
+                        "type": "range",
+                        "values": [],
+                        "js_only": True,
+                        "unit": unit,
+                        "step": step,
+                    }
+                    continue
                 url_template = _resolve_url_template(config, dim_key, dim_cfg)
                 dims[dim_key] = {
                     "label": dim_cfg["label"],
@@ -206,6 +339,8 @@ class FiltersPlugin:
                     "values": fetch_filter_values(conn, main_table, dim_key, dim_cfg, url_template),
                     "js_only": not url_template,
                 }
+            if filters_cfg.get("sort_records") is not None:
+                dims["_sort_records"] = _sort_records_params(filters_cfg["sort_records"])
             # _card_template is consumed by _filter_card_template.html
             dims["_card_template"] = filters_cfg.get("card_template")
             page_filters[page_name] = dims

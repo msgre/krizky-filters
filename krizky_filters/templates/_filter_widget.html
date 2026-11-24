@@ -17,6 +17,7 @@
     </div>
     {% endfor %}
   </div>
+  {% if _dims._sort_records %}{% include "_filter_sort.html" %}{% endif %}
   <div class="filter-active" data-filter-active-list></div>
   <button type="button" class="filter-clear" data-filter-clear hidden>&#x2715;</button>
 </div>

@@ -1,0 +1,25 @@
+<div class="filter-range">
+  <label class="filter-range-field">
+    <span class="filter-range-label">od</span>
+    <input type="number"
+           inputmode="decimal"
+           min="0"
+           step="{{ _dim.step }}"
+           class="filter-range-input"
+           data-filter-dimension="{{ _dim_key }}"
+           data-filter-range="min"
+           aria-label="{{ _dim.label }} od">
+  </label>
+  <label class="filter-range-field">
+    <span class="filter-range-label">do</span>
+    <input type="number"
+           inputmode="decimal"
+           min="0"
+           step="{{ _dim.step }}"
+           class="filter-range-input"
+           data-filter-dimension="{{ _dim_key }}"
+           data-filter-range="max"
+           aria-label="{{ _dim.label }} do">
+  </label>
+  {% if _dim.unit %}<span class="filter-range-unit">{{ _dim.unit }}</span>{% endif %}
+</div>
