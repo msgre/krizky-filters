@@ -14,6 +14,8 @@
  *   [data-filter-value][data-filter-dimension]  clickable filter control (pill, checkbox, …)
  *   [data-filter-range="min|max"][data-filter-dimension]
  *                                               number input: lower/upper bound of a range dimension
+ *   [data-filter-sort]                          <select>: record sorting ("" = default order, "field",
+ *                                               "-field"); not reset by [data-filter-clear]
  *   [data-filter-clear]                         button: clear all active filters
  *   [data-filter-active-list]                   container: JS inserts removable chips here
  *   [data-filter-count-filtered]                shows current filtered record count
@@ -37,6 +39,9 @@
     serializeRange,
     matchesRange,
     rangeExtent,
+    parseSortParam,
+    compareSortValues,
+    sortRecords,
   });
 
   // Finite number for finite `number` and non-empty numeric strings, else null.
@@ -122,6 +127,55 @@
     return min === null ? null : { min, max };
   }
 
+  // Record sorting (not the value sorting of parseSort below).
+  // "cena" → {field, desc: false}, "-cena" → {field, desc: true}; a field not in
+  // `options` ([{field, label}]), empty value, null or "-" → null.
+  function parseSortParam(raw, options) {
+    const text = String(raw ?? '').trim();
+    const desc = text.startsWith('-');
+    const field = desc ? text.slice(1) : text;
+    if (!field || !Array.isArray(options) || !options.some((o) => o.field === field)) {
+      return null;
+    }
+    return { field, desc };
+  }
+
+  function isEmptySortValue(v) {
+    return v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
+  }
+
+  // Empty values (null, undefined, blank string) always go last, whatever `desc`
+  // is; `desc` only reverses non-empty values. Two numbers (or numeric strings)
+  // compare numerically; otherwise (also when only one of them is numeric) both
+  // are compared as text via sortKeyAlpha(String(v)).
+  function compareSortValues(a, b, desc) {
+    const aEmpty = isEmptySortValue(a);
+    const bEmpty = isEmptySortValue(b);
+    if (aEmpty || bEmpty) {
+      return aEmpty === bEmpty ? 0 : aEmpty ? 1 : -1;
+    }
+    const na = toNumber(a);
+    const nb = toNumber(b);
+    let result;
+    if (na !== null && nb !== null) {
+      result = na < nb ? -1 : na > nb ? 1 : 0;
+    } else {
+      const ta = sortKeyAlpha(String(a));
+      const tb = sortKeyAlpha(String(b));
+      result = ta < tb ? -1 : ta > tb ? 1 : 0;
+    }
+    return desc ? -result : result;
+  }
+
+  // New array sorted by record[sort.field] (stable); sort === null keeps the input order.
+  function sortRecords(records, sort) {
+    const copy = [...records];
+    if (!sort) {
+      return copy;
+    }
+    return copy.sort((x, y) => compareSortValues(x[sort.field], y[sort.field], sort.desc));
+  }
+
   // ── Bootstrap ────────────────────────────────────────────────────────────
 
   // Class set on <html> by the inline head script; CSS shows [data-filter-js-only]
@@ -163,6 +217,12 @@
   let allRecords = [];
   let currentPage = 1;
 
+  // Record sorting lives outside `state`: it is not a filter, so activeState,
+  // the clear button and [data-filter-clear] ignore it.
+  const sortConfig = config.sortRecords ?? null;
+  /** @type {{field: string, desc: boolean} | null} */
+  let currentSort = null;
+
   // ── Load data ─────────────────────────────────────────────────────────────
 
   fetch(jsonUrl)
@@ -179,6 +239,7 @@
       attachClearListeners();
       attachTextListeners();
       attachRangeListeners();
+      attachSortListeners();
       window.addEventListener('popstate', () => {
         parseUrlState();
         filterAndRender();
@@ -238,6 +299,9 @@
         state.set(dim, new Set(raw.split(',').filter(Boolean)));
       }
     }
+    currentSort = sortConfig
+      ? parseSortParam(params.get(sortConfig.param), sortConfig.options)
+      : null;
     currentPage = pageFromPath(basePath);
   }
 
@@ -247,6 +311,9 @@
       if (values.size > 0) {
         params.set(dim, [...values].join(','));
       }
+    }
+    if (sortConfig && currentSort) {
+      params.set(sortConfig.param, (currentSort.desc ? '-' : '') + currentSort.field);
     }
     return params.toString();
   }
@@ -577,7 +644,7 @@
   // ── Render ────────────────────────────────────────────────────────────────
 
   function filterAndRender() {
-    const filtered = allRecords.filter(matchesFilter);
+    const filtered = sortRecords(allRecords.filter(matchesFilter), currentSort);
     updateFilterStates();
     updateFilterCount(filtered.length, allRecords.length);
     updateActiveList();
@@ -585,6 +652,7 @@
     syncTextInputs();
     syncRangeInputs();
     updateRangePlaceholders();
+    syncSortSelects();
 
     const facets = facetsEnabled ? computeFacets() : null;
     if (facets) {
@@ -613,7 +681,8 @@
         detail: {
           filtered: filtered.length, // count (subset)
           total: allRecords.length, // count (full dataset)
-          filteredRecords: filtered, // actual records that matched
+          filteredRecords: filtered, // actual records that matched, in sorted order
+          sort: currentSort ? (currentSort.desc ? '-' : '') + currentSort.field : null,
           activeState: Object.fromEntries([...state].map(([k, v]) => [k, [...v]])),
           facets, // null when facets disabled
         },
@@ -1141,6 +1210,34 @@
       const val = bound === null || bound === undefined ? '' : plainNumber(bound);
       if (document.activeElement !== input && input.value !== val) {
         input.value = val;
+      }
+    });
+  }
+
+  // <select data-filter-sort>: "" = default order, else "field" / "-field".
+  function attachSortListeners() {
+    if (!sortConfig) {
+      return;
+    }
+    document.querySelectorAll('[data-filter-sort]').forEach((select) => {
+      select.addEventListener('change', () => {
+        currentSort = parseSortParam(select.value, sortConfig.options);
+        currentPage = 1;
+        updateUrl();
+        filterAndRender();
+      });
+    });
+  }
+
+  // Reflect the sort state into all [data-filter-sort] selects (initial load / popstate).
+  function syncSortSelects() {
+    if (!sortConfig) {
+      return;
+    }
+    const val = currentSort ? (currentSort.desc ? '-' : '') + currentSort.field : '';
+    document.querySelectorAll('[data-filter-sort]').forEach((select) => {
+      if (select.value !== val) {
+        select.value = val;
       }
     });
   }
