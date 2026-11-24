@@ -9,6 +9,9 @@ Plugin dodává výchozí filter widget jako soubor Jinja2 šablon. Každý proj
 | `_filter_widget.html` | Dispatcher — iteruje dimenze a deleguje na per-type šablony |
 | `_filter_widget_select.html` | Widget pro `type: select` |
 | `_filter_widget_multiselect.html` | Widget pro `type: multiselect` |
+| `_filter_widget_text.html` | Widget pro `type: text` |
+| `_filter_widget_range.html` | Widget pro `type: range`: dvě číselná pole od–do |
+| `_filter_sort.html` | Select „Řadit podle" pro `filters.sort_records` |
 | `_filter_card_template.html` | Wrappuje card partial do `<template id="card-template">` |
 
 Loading order Jinja2 loaderu: `project templates/` → `plugin templates/` → `krizky/templates/`. Cokoliv, co je v projektu, přebije plugin default.
@@ -23,8 +26,10 @@ Kontext, který má šablona k dispozici:
 |---|---|---|
 | `_dim_key` | string | Název dimenze (např. `typ`, `stitky`) |
 | `_dim.label` | string | Label z configu |
-| `_dim.type` | string | `select` \| `multiselect` \| `text` |
-| `_dim.js_only` | bool | `true` pro `text` a pro select/multiselect bez URL šablony (ovládání nefunguje bez JS) |
+| `_dim.type` | string | `select` \| `multiselect` \| `text` \| `range` |
+| `_dim.unit` | string | Jen `range`: text za poli, default `""` |
+| `_dim.step` | číslo \| `"any"` | Jen `range`: atribut `step` polí, default `"any"` |
+| `_dim.js_only` | bool | `true` pro `text`, `range` a pro select/multiselect bez URL šablony (ovládání nefunguje bez JS) |
 | `_dim.many` | bool | Zda je sloupec JSON pole |
 | `_dim["values"]` | list | Seznam hodnot |
 | `_dim["values"][i].value` | string | Zobrazovaná hodnota (např. „Kříž") |
@@ -138,6 +143,21 @@ JS napojí `input` event s debounce 200 ms, aktualizuje state a URL. Widget nem�
 | `_dim.label` | Text pro placeholder / aria-label |
 | `_dim["values"]` | Prázdný list (text dim nemá diskrétní hodnoty) |
 
+## Range widget a select řazení
+
+`_filter_widget_range.html` vykreslí dvě `<input type="number" inputmode="decimal" min="0">` s hook atributy:
+
+| Atribut | Účel |
+|---|---|
+| `data-filter-range="min"` / `"max"` | Dolní a horní mez; JS na ně váže `change`/`input` a plní placeholdery |
+| `data-filter-dimension="<dim>"` | Dimenze, ke které pole patří |
+
+Za poli je `unit` (jen když není prázdné) a atribut `step` pochází z configu. Obal dimenze má `data-filter-js-only`.
+
+`_filter_sort.html` vykreslí obal s `data-filter-js-only` a `<select data-filter-sort>`: první volba `value=""` s textem `default_label`, pak pro každou položku `options` volby `value="<field>"` („{label} ↑") a `value="-<field>"` („{label} ↓"). Texty šipek jsou v šabloně, přebij ji v projektu.
+
+`_filter_widget.html` select vloží automaticky, když má stránka `sort_records`. Chceš ho jinde? Přebij `_filter_widget.html` a vlož `{% include "_filter_sort.html" %}` na vlastní místo (šablona čte `_dims._sort_records`, kde `_dims = page_filters[page_name]`).
+
 ## Combobox pattern
 
 Combobox (dropdown s vyhledáváním) není součástí pluginu, protože jeho open/close/search logika je čistě UI záležitost projektu. Plugin ale dodává **event `krizky-filters:update`**, který combobox JS potřebuje pro aktualizaci trigger tlačítka.
@@ -162,6 +182,8 @@ Kromě filter controls dodává plugin i JS hooky pro doplňkové elementy widge
 | `[data-filter-count-filtered]` | Element, do kterého se zapisuje počet filtrovaných záznamů |
 | `[data-filter-count-total]` | Element, do kterého se zapisuje celkový počet záznamů |
 | `[data-filter-count]` | Alternativa — element se šablonou `{filtered}`/`{total}` (JS nahradí placeholdery) |
+| `[data-filter-range="min\|max"]` | Číselné pole rozsahu (spolu s `data-filter-dimension`) |
+| `[data-filter-sort]` | Select řazení záznamů |
 | `[data-filter-grid]` | Kontejner, do kterého JS renderuje karty |
 | `[data-filter-pagination]` | Kontejner pro JS stránkování (JS ho naplní) |
 | `[data-static-pagination]` | Wrapper okolo statického paginátoru — JS ho skryje, když aktivně stránkuje |

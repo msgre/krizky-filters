@@ -1,0 +1,10 @@
+{% set _sort = _dims._sort_records %}
+<div class="filter-sort" data-filter-js-only>
+  <select class="filter-sort-select" data-filter-sort aria-label="Řadit podle">
+    <option value="">{{ _sort.default_label }}</option>
+    {% for _opt in _sort.options %}
+    <option value="{{ _opt.field }}">{{ _opt.label }} ↑</option>
+    <option value="-{{ _opt.field }}">{{ _opt.label }} ↓</option>
+    {% endfor %}
+  </select>
+</div>

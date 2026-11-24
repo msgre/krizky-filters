@@ -101,3 +101,20 @@
 html:not(.filter-js) [data-filter-js-only] {
   display: none;
 }
+
+.filter-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-range-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.filter-range-input {
+  width: 8rem;
+}
