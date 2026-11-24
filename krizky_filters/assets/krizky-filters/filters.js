@@ -12,6 +12,8 @@
  *
  * UI hook points (add to any element in your template to opt in):
  *   [data-filter-value][data-filter-dimension]  clickable filter control (pill, checkbox, …)
+ *   [data-filter-range="min|max"][data-filter-dimension]
+ *                                               number input: lower/upper bound of a range dimension
  *   [data-filter-clear]                         button: clear all active filters
  *   [data-filter-active-list]                   container: JS inserts removable chips here
  *   [data-filter-count-filtered]                shows current filtered record count
@@ -22,6 +24,103 @@
  */
 (function () {
   'use strict';
+
+  // ── Pure functions ───────────────────────────────────────────────────────
+
+  // Pure helpers exposed for `node --test` (tests/js/load-filters.mjs), NOT a
+  // stable API. They are function declarations (hoisted) and must not touch
+  // const/let declared below: the script may end in the bootstrap before them.
+  globalThis.krizkyFiltersPure = Object.freeze({
+    toNumber,
+    plainNumber,
+    parseRangeValue,
+    serializeRange,
+    matchesRange,
+    rangeExtent,
+  });
+
+  // Finite number for finite `number` and non-empty numeric strings, else null.
+  function toNumber(value) {
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? value : null;
+    }
+    if (typeof value === 'string' && value.trim() !== '') {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    }
+    return null;
+  }
+
+  // Decimal string of a finite number without exponent (1e-7 → "0.0000001",
+  // 1e21 → "1000000000000000000000"), so it survives parseRangeValue.
+  function plainNumber(n) {
+    const s = String(n);
+    const match = /^(-?)(\d)(?:\.(\d+))?e([+-]\d+)$/.exec(s);
+    if (!match) {
+      return s;
+    }
+    const [, sign, lead, frac = '', exp] = match;
+    const digits = lead + frac;
+    const point = 1 + Number(exp); // decimal point position within `digits`
+    if (point <= 0) {
+      return `${sign}0.${'0'.repeat(-point)}${digits}`;
+    }
+    if (point >= digits.length) {
+      return `${sign}${digits}${'0'.repeat(point - digits.length)}`;
+    }
+    return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
+  }
+
+  // "3000000-5000000" | "3000000-" | "-5000000" → {min, max}; invalid → null.
+  // Non-negative finite decimals only; swapped bounds are put in order.
+  function parseRangeValue(raw) {
+    const match = /^(\d+(?:\.\d+)?)?-(\d+(?:\.\d+)?)?$/.exec(String(raw ?? '').trim());
+    if (!match || (match[1] === undefined && match[2] === undefined)) {
+      return null;
+    }
+    let min = match[1] === undefined ? null : Number(match[1]);
+    let max = match[2] === undefined ? null : Number(match[2]);
+    // Too many digits overflow to Infinity, which has no canonical form.
+    if ((min !== null && !Number.isFinite(min)) || (max !== null && !Number.isFinite(max))) {
+      return null;
+    }
+    if (min !== null && max !== null && min > max) {
+      [min, max] = [max, min];
+    }
+    return { min, max };
+  }
+
+  // Canonical URL form of a range; "" when both bounds are null.
+  function serializeRange({ min, max }) {
+    if (min === null && max === null) {
+      return '';
+    }
+    return `${min === null ? '' : plainNumber(min)}-${max === null ? '' : plainNumber(max)}`;
+  }
+
+  // Inclusive bounds; null / missing / non-numeric values do not match.
+  function matchesRange(value, { min, max }) {
+    const n = toNumber(value);
+    if (n === null) {
+      return false;
+    }
+    return (min === null || n >= min) && (max === null || n <= max);
+  }
+
+  // {min, max} of numeric `field` values over records, or null without any.
+  function rangeExtent(records, field) {
+    let min = null;
+    let max = null;
+    for (const record of records) {
+      const n = toNumber(record[field]);
+      if (n === null) {
+        continue;
+      }
+      min = min === null || n < min ? n : min;
+      max = max === null || n > max ? n : max;
+    }
+    return min === null ? null : { min, max };
+  }
 
   // ── Bootstrap ────────────────────────────────────────────────────────────
 
@@ -79,6 +178,7 @@
       attachFilterListeners();
       attachClearListeners();
       attachTextListeners();
+      attachRangeListeners();
       window.addEventListener('popstate', () => {
         parseUrlState();
         filterAndRender();
@@ -128,6 +228,12 @@
       if (dimCfg.type === 'text') {
         // Text queries can contain any character (including commas) — no split.
         state.set(dim, new Set([raw]));
+      } else if (dimCfg.type === 'range') {
+        // Canonical "min-max" string; invalid values are ignored.
+        const range = parseRangeValue(raw);
+        if (range) {
+          state.set(dim, new Set([serializeRange(range)]));
+        }
       } else {
         state.set(dim, new Set(raw.split(',').filter(Boolean)));
       }
@@ -235,6 +341,10 @@
       return true;
     }
     const dimCfg = dimensions[dim];
+    if (dimCfg && dimCfg.type === 'range') {
+      const range = parseRangeValue([...active][0]);
+      return range ? matchesRange(record[dim], range) : true;
+    }
     if (dimCfg && dimCfg.type === 'text') {
       const words = normalizeText([...active][0])
         .split(/\s+/)
@@ -281,8 +391,8 @@
   function computeFacets() {
     const facets = {};
     for (const dim of Object.keys(dimensions)) {
-      // Text dims have no discrete values — nothing to facet-count.
-      if (dimensions[dim].type === 'text') {
+      // Text and range dims have no discrete values — nothing to facet-count.
+      if (dimensions[dim].type === 'text' || dimensions[dim].type === 'range') {
         continue;
       }
       const subset = allRecords.filter((r) => matchesAllExcept(r, dim));
@@ -473,6 +583,8 @@
     updateActiveList();
     updateClearButton();
     syncTextInputs();
+    syncRangeInputs();
+    updateRangePlaceholders();
 
     const facets = facetsEnabled ? computeFacets() : null;
     if (facets) {
@@ -791,7 +903,10 @@
           const controlEl = document.querySelector(
             `[data-filter-value="${CSS.escape(slug)}"][data-filter-dimension="${CSS.escape(dim)}"]`
           );
-          const label = controlEl ? controlEl.textContent.trim() : slug;
+          let label = controlEl ? controlEl.textContent.trim() : slug;
+          if (dimensions[dim] && dimensions[dim].type === 'range') {
+            label = rangeChipLabel(dim, slug);
+          }
           const chip = document.createElement('button');
           chip.type = 'button';
           chip.className = 'filter-chip';
@@ -801,6 +916,27 @@
         }
       }
     });
+  }
+
+  // "Cena: 3 000 000–5 000 000 Kč" | "Cena: od …" | "Cena: do …" (text only, set via textContent).
+  function rangeChipLabel(dim, value) {
+    const dimCfg = dimensions[dim];
+    const range = parseRangeValue(value);
+    if (!range) {
+      return value;
+    }
+    const lang = document.documentElement.lang || undefined;
+    const fmt = (n) => n.toLocaleString(lang);
+    const unit = dimCfg.unit ? ` ${dimCfg.unit}` : '';
+    let text;
+    if (range.min !== null && range.max !== null) {
+      text = `${fmt(range.min)}–${fmt(range.max)}`;
+    } else if (range.min !== null) {
+      text = `od ${fmt(range.min)}`;
+    } else {
+      text = `do ${fmt(range.max)}`;
+    }
+    return `${dimCfg.label || dim}: ${text}${unit}`;
   }
 
   function removeFilterValue(dim, slug) {
@@ -932,5 +1068,98 @@
     document.querySelectorAll(`[data-filter-clear-dim="${CSS.escape(dim)}"]`).forEach((btn) => {
       btn.hidden = !hasValue;
     });
+  }
+
+  // ── Range inputs ──────────────────────────────────────────────────────────
+
+  const RANGE_DEBOUNCE_MS = 300;
+
+  // Dimension whose inputs are being applied right now. Its inputs are the
+  // source of the change, so syncRangeInputs() must not rewrite them with the
+  // canonical state (swapped bounds would destroy what the user is typing).
+  let rangeEditingDim = null;
+
+  function rangeInputs(dim) {
+    return document.querySelectorAll(
+      `[data-filter-range][data-filter-dimension="${CSS.escape(dim)}"]`
+    );
+  }
+
+  // Read both inputs of a range dimension into state (empty/invalid → inactive).
+  function applyRangeInputs(dim) {
+    const bounds = { min: '', max: '' };
+    rangeInputs(dim).forEach((input) => {
+      bounds[input.dataset.filterRange] = input.value.trim();
+    });
+    const range = parseRangeValue(`${bounds.min}-${bounds.max}`);
+    const value = range ? serializeRange(range) : '';
+    if (value) {
+      state.set(dim, new Set([value]));
+    } else {
+      state.delete(dim);
+    }
+    currentPage = 1;
+    updateUrl();
+    rangeEditingDim = dim;
+    try {
+      filterAndRender();
+    } finally {
+      rangeEditingDim = null;
+    }
+  }
+
+  function attachRangeListeners() {
+    document.querySelectorAll('[data-filter-range][data-filter-dimension]').forEach((input) => {
+      const dim = input.dataset.filterDimension;
+      if (!dimensions[dim] || dimensions[dim].type !== 'range') {
+        return;
+      }
+      let timer = null;
+      input.addEventListener('change', () => {
+        clearTimeout(timer);
+        applyRangeInputs(dim);
+      });
+      input.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => applyRangeInputs(dim), RANGE_DEBOUNCE_MS);
+      });
+    });
+  }
+
+  // Reflect state into range inputs (popstate / initial load / chip removal /
+  // clear). Skip the focused input and the dimension being edited so we never
+  // overwrite what the user is typing.
+  function syncRangeInputs() {
+    document.querySelectorAll('[data-filter-range][data-filter-dimension]').forEach((input) => {
+      const dim = input.dataset.filterDimension;
+      if (dim === rangeEditingDim) {
+        return;
+      }
+      const active = state.get(dim);
+      const range = active && active.size > 0 ? parseRangeValue([...active][0]) : null;
+      const bound = range ? range[input.dataset.filterRange] : null;
+      const val = bound === null || bound === undefined ? '' : plainNumber(bound);
+      if (document.activeElement !== input && input.value !== val) {
+        input.value = val;
+      }
+    });
+  }
+
+  // Placeholders = extent of the field over records passing all OTHER filters
+  // (all records without facets); empty when no such record has a number.
+  function updateRangePlaceholders() {
+    for (const [dim, dimCfg] of Object.entries(dimensions)) {
+      if (dimCfg.type !== 'range') {
+        continue;
+      }
+      const records = facetsEnabled
+        ? allRecords.filter((r) => matchesAllExcept(r, dim))
+        : allRecords;
+      const extent = rangeExtent(records, dim);
+      rangeInputs(dim).forEach((input) => {
+        const bound = extent ? extent[input.dataset.filterRange] : null;
+        input.placeholder = bound === null || bound === undefined ? '' : plainNumber(bound);
+      });
+    }
   }
 })();

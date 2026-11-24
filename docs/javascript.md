@@ -105,6 +105,7 @@ Kombinace:    /vsechna-mista-2.html?typ=kriz&stitky=baroko
 Vlastnosti:
 - Funguje browser back/forward (`popstate` listener)
 - URL bookmarkovatelná — vstup s URL parametry rovnou aktivuje filtr
+- Rozsah (`type: range`) je jeden parametr `?cena=3000000-5000000` (`3000000-` jen od, `-5000000` jen do), viz [Range dim](#range-dim-číselný-rozsah)
 - Middle-click / open-in-new-tab funguje díky reálným `href` atributům na pill/pagination linkách
 - Kompatibilní s no-JS (server má statické stránky `/vsechna-mista-N.html`, filtry v query se pak jen ignorují)
 
@@ -117,7 +118,8 @@ Všechny hookovací atributy fungují přes **event delegation** nebo přes DOM 
 | Atribut | Chování |
 |---|---|
 | `[data-filter-value="slug"][data-filter-dimension="dim"]` | Element funguje jako filter control. Click → toggle hodnoty ve state, aplikovat filtr. |
-| `[data-filter-clear]` | Click → vyprázdnit všechny filtry. Element se skryje (`hidden`) když nic není aktivní. |
+| `[data-filter-range="min\|max"][data-filter-dimension="dim"]` | Číselné pole mezí dimenze `type: range`, viz [Range dim](#range-dim-číselný-rozsah). |
+| `[data-filter-clear]` | Click → vyprázdnit všechny filtry (včetně rozsahů). Element se skryje (`hidden`) když nic není aktivní. |
 | `[data-filter-clear-dim="dim"]` | Click → vymazat jen tu dimenzi. Užitečné pro chip × tlačítko nebo per-dimension clear v combobox triggeru. |
 
 ### Zobrazení jen s JS
@@ -238,11 +240,33 @@ Plugin injektuje do stránky JSON s konfigurací filtru:
   "boundary": 1,
   "dimensions": {
     "typ": {"label": "Typ", "type": "select"},
-    "stitky": {"label": "Štítek", "type": "multiselect", "many": true}
+    "stitky": {"label": "Štítek", "type": "multiselect", "many": true},
+    "cena": {"label": "Cena", "type": "range", "unit": "Kč", "step": 100000}
   }
 }
 </script>
 ```
+
+Dimenze `type: range` má v configu navíc `unit` (text za čísly, v chipu aktivního filtru) a `step` (atribut `step` číselných polí).
+
+## Range dim (číselný rozsah)
+
+`type: range` je rozsah od–do nad číselným polem záznamu (klíč dimenze = název pole = název URL parametru).
+
+- **State**: `Set([ "3000000-5000000" ])`, jeden kanonický řetězec jako u textové dimenze. Tvar `activeState` v `krizky-filters:update` se nemění.
+- **URL**: `?cena=3000000-5000000`, jen dolní mez `?cena=3000000-`, jen horní mez `?cena=-5000000`. Čísla jsou nezáporná, desetinná s tečkou. Neplatná hodnota (`abc`, `1-2-3`, `-`, číslo s tolika číslicemi, že přeteče do `Infinity`) se ignoruje. Když je min > max, meze se prohodí. Kanonický tvar je vždy bez exponentu (`0.0000001-`, ne `1e-7-`), takže projde zpět parsováním.
+- **Shoda**: meze jsou včetně. Záznam s hodnotou `null`, bez pole nebo nečíselnou při aktivním rozsahu neprojde. Číselný řetězec (`"52.5"`) se bere jako číslo.
+- **Ovládání**: pole `[data-filter-range]` reagují na `change` hned a na `input` s debounce 300 ms (konstanta `RANGE_DEBOUNCE_MS`). Obě pole prázdná nebo neplatná = dimenze není aktivní. Změna vrací stránkování na stranu 1. Pole dimenze, kterou uživatel právě mění, se kanonickým stavem nepřepisují (prohozené meze se tak projeví jen ve stavu, URL a chipu, ne v rozepsaném poli).
+- **Fasety (placeholdery)**: placeholdery polí `min` a `max` jsou minimum a maximum pole přes záznamy, které projdou všemi aktivními filtry kromě tohoto rozsahu (bez `facets` přes všechny záznamy). Bez takového záznamu jsou prázdné. Přepočítají se při každém `filterAndRender`. `computeFacets` range přeskakuje, ale rozsah zužuje fasety ostatních dimenzí.
+- **Chip**: „Cena: 3 000 000–5 000 000 Kč“, „Cena: od 3 000 000 Kč“, „Cena: do 5 000 000 Kč“. Klik na chip rozsah odebere, `[data-filter-clear]` ho vyprázdní také.
+
+| Atribut | Chování |
+|---|---|
+| `[data-filter-range="min\|max"][data-filter-dimension="dim"]` | Číselné pole dolní (`min`) nebo horní (`max`) meze. Pole se vyplňují ze stavu při načtení, back/forward, odebrání chipu a vyčištění (fokusované a právě měněná dimenze se nepřepisují). |
+
+### `globalThis.krizkyFiltersPure`
+
+`filters.js` vystavuje čisté funkce (`toNumber`, `plainNumber`, `parseRangeValue`, `serializeRange`, `matchesRange`, `rangeExtent`) jako `globalThis.krizkyFiltersPure`, aby šly testovat přes `node --test` bez DOM (`tests/js/load-filters.mjs`). Je to jen pro testy, ne stabilní API.
 
 Custom JS to může přečíst pro vlastní účely (např. combobox JS potřebuje znát seznam dimenzí a jejich labely). Nikdy se do konfigurace nezapisuje z JS — je to input pro plugin.
 
