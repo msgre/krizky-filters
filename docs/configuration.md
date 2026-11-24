@@ -42,6 +42,17 @@ site:
             label: Hledat
             type: text
             search_fields: [nazev, pribeh, umisteni]
+          cena:                           # volitelně: číselný rozsah od-do (jen s JS)
+            label: Cena
+            type: range
+            unit: Kč                      # volitelně: text za poli
+            step: 100000                  # volitelně: atribut step polí, default "any"
+        sort_records:                     # volitelně: select „Řadit podle" (jen s JS)
+          param: sort                     # volitelně: parametr v URL, default "sort"
+          default_label: Výchozí řazení   # volitelně: popisek výchozí volby
+          options:
+            - {field: cena, label: Cena}
+            - {field: plocha, label: Plocha}
 ```
 
 ## Klíče
@@ -71,11 +82,13 @@ Pro každou dimenzi:
 | Klíč | Typ | Popis |
 |---|---|---|
 | `label` | string | Zobrazovaný název (např. „Typ", „Štítek") |
-| `type` | `select` \| `multiselect` \| `text` | Widget typ |
+| `type` | `select` \| `multiselect` \| `text` \| `range` | Widget typ |
 | `many` | bool | `true` pokud sloupec obsahuje JSON pole hodnot (jako tagy) — jen pro select/multiselect |
 | `url` | string | URL šablona s `{slug}` placeholderem pro `href` pill/checkbox elementu (viz níže) — jen pro select/multiselect |
 | `sort` | string | Pořadí hodnot v seznamu — preset (`count` \| `alpha`) nebo explicitní multi-column (`-count,alpha`); viz [Sortování](#sortování) — jen pro select/multiselect |
 | `search_fields` | list | **Text dim only:** seznam polí záznamu, ve kterých se hledá dotaz. Viz [Fulltextové hledání](#fulltextové-hledání). |
+| `unit` | string | **Range dim only:** text za poli (a v chipu aktivního filtru), default `""` |
+| `step` | číslo \| `any` | **Range dim only:** atribut `step` číselných polí, kladné číslo nebo `any` (default) |
 
 #### `type: select` vs `multiselect`
 
@@ -275,6 +288,53 @@ Aktuální řešení používá **naivní NFKD-normalizovaný substring match** 
 
 Doporučená cesta: **začni s naivní implementací**. Když uživatelé opakovaně nevidí očekávané výsledky, zvaž MiniSearch — v pluginu je jasně vyčleněná funkce `matchesText` v `filters.js`, nahradit ji indexovaným lookup je otázka ~30 řádků.
 
+## Číselný rozsah (`type: range`)
+
+Dimenze `type: range` je číselný rozsah od–do nad jedním polem záznamu (dvě číselná pole). Funguje jen s JS, obal dimenze má `data-filter-js-only`.
+
+```yaml
+dimensions:
+  cena:
+    label: Cena
+    type: range
+    unit: Kč
+    step: 100000
+```
+
+- Klíč dimenze je zároveň název pole záznamu (musí být v `fields`) a název parametru v URL. Sloupec `<dim>_slug` není potřeba.
+- `unit` (string, default `""`) se zobrazí za poli a v chipu aktivního filtru. `step` (kladné číslo nebo `any`, default `any`) jde do atributu `step` polí. Neplatná hodnota → varování a výchozí hodnota.
+- `many`, `sort` a `search_fields` se u `range` nepoužijí; když jsou uvedené, plugin zaloguje varování.
+- **URL:** `?cena=3000000-5000000`, jen dolní mez `?cena=3000000-`, jen horní mez `?cena=-5000000`. Platná jsou jen nezáporná čísla (desetinná s tečkou).
+- **Shoda:** meze jsou včetně. Záznam s hodnotou `null` nebo bez pole při aktivním rozsahu neprojde.
+- **Fasety:** placeholdery polí jsou min a max pole přes záznamy, které projdou ostatními aktivními filtry. Rozsah sám počty hodnot nemá, ale zužuje fasety ostatních dimenzí.
+- Min a max se v Pythonu nepočítají, počítá je JS z načteného JSON.
+- Mimo rozsah: záporná čísla, data, dvojitý posuvník.
+
+## Řazení záznamů (`sort_records`)
+
+Volitelný select „Řadit podle" nad poli záznamu. Klíč `sort_records` patří přímo do `filters:` (vedle `dimensions`), funguje jen s JS.
+
+```yaml
+filters:
+  sort_records:
+    param: sort                 # volitelně, default "sort"
+    default_label: Nejnovější   # volitelně, default "Výchozí řazení"
+    options:
+      - {field: cena, label: Cena}
+      - {field: plocha, label: Plocha}
+```
+
+| Klíč | Popis |
+|---|---|
+| `param` | Název parametru v URL, default `sort`. Nesmí se shodovat s klíčem dimenze. |
+| `default_label` | Popisek výchozí volby selectu |
+| `options` | Seznam `{field, label}`; `field` musí být v `fields`. Položka bez `field` nebo `label` se ignoruje. |
+
+- **URL:** `?sort=cena` (vzestupně), `?sort=-cena` (sestupně). Hodnota mimo `options` se ignoruje, výchozí řazení parametr v URL nemá.
+- **Výchozí řazení** je pořadí záznamů v JSON filtru, tedy `order_by` stránky. JS ho při volbě výchozího řazení nemění.
+- Hodnoty `null` a prázdné jdou vždy na konec, v obou směrech.
+- `[data-filter-clear]` řazení nemaže, není to filtr.
+
 ## Facets (dynamické počty a skrývání)
 
 Když `facets: true`, plugin dynamicky přepočítá počty u každé hodnoty na základě aktuálně aktivních filtrů z ostatních dimenzí. Hodnoty, které by po aplikaci vedly k prázdnému výsledku, se skryjí (nebo znepřístupní podle `facets_mode`).
@@ -297,11 +357,18 @@ Viz [javascript.md](javascript.md#facets) pro detaily JS API.
 
 Plugin při chybné konfiguraci filtrů varuje v logu buildu (`WARNING`, jednou za build, zpráva obsahuje název stránky a u dimenzí i jejich klíč). Build se kvůli varování nezastaví ani nezmění. Kontrolované případy:
 
-1. dimenze má `type` jiný než `select`, `multiselect` nebo `text`,
+1. dimenze má `type` jiný než `select`, `multiselect`, `text` nebo `range`,
 2. dimenze `type: text` nemá `search_fields` nebo je seznam prázdný,
 3. `sort` obsahuje neznámý preset nebo sloupec (u dict tvaru chybí `order` nebo je neplatný `fallback`),
 4. `facets_mode` není `hide` ani `disable`,
-5. stránka má `filters:`, ale žádnou dimenzi.
+5. stránka má `filters:`, ale žádnou dimenzi,
+6. dimenze `type: range` má klíč `many`, `sort` nebo `search_fields` (klíč se ignoruje),
+7. dimenze `type: range` má `step`, které není kladné číslo ani `any` (použije se `any`),
+8. dimenze `type: range` má `unit`, které není řetězec (použije se prázdný),
+9. `sort_records.param` je stejný jako klíč některé dimenze,
+10. `sort_records.options` chybí nebo je prázdné,
+11. položka `sort_records.options` nemá `field` nebo `label` (položka se ignoruje),
+12. `filters.fields` je nastavené a neobsahuje `field` některé položky `sort_records.options` (položka zůstane, v JSON by pole chybělo).
 
 ## Kontext fotek
 

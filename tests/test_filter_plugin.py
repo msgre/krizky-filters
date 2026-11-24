@@ -923,3 +923,266 @@ def test_render_js_only_attributes_all_js_only(conn):
     assert "data-filter-js-only" in _tag(html, 'data-dimension="q"')
     assert "data-filter-js-only" in _tag(html, 'data-dimension="typ"')
     assert "data-filter-js-only" in _tag(html, "data-filter-widget")
+
+
+# ── range dimenze ─────────────────────────────────────────────────────────────
+
+
+def _range_config(**dim_extra) -> dict:
+    return {
+        "sources": {"tables": {"mista": {"main": True}}},
+        "site": {
+            "pages": {
+                "mista": {
+                    "path": "/mista.html",
+                    "filters": {
+                        "dimensions": {"cena": {"label": "Cena", "type": "range", **dim_extra}},
+                    },
+                },
+            },
+        },
+    }
+
+
+def test_extra_template_vars_range_dim(conn):
+    dim = _page_filters(conn, _range_config(unit="Kč", step=100000))["mista"]["cena"]
+    assert dim == {
+        "label": "Cena",
+        "type": "range",
+        "values": [],
+        "js_only": True,
+        "unit": "Kč",
+        "step": 100000,
+    }
+
+
+def test_extra_template_vars_range_dim_defaults(conn):
+    dim = _page_filters(conn, _range_config())["mista"]["cena"]
+    assert dim["unit"] == ""
+    assert dim["step"] == "any"
+
+
+def test_build_filter_config_range_dim(minimal_config):
+    page_cfg = _range_config(unit="Kč", step=5)["site"]["pages"]["mista"]
+    cfg = _build_filter_config(page_cfg, minimal_config)
+    assert cfg["dimensions"]["cena"] == {
+        "label": "Cena",
+        "type": "range",
+        "unit": "Kč",
+        "step": 5,
+    }
+
+
+def test_build_filter_config_range_dim_defaults(minimal_config):
+    page_cfg = _range_config()["site"]["pages"]["mista"]
+    cfg = _build_filter_config(page_cfg, minimal_config)
+    assert cfg["dimensions"]["cena"] == {
+        "label": "Cena",
+        "type": "range",
+        "unit": "",
+        "step": "any",
+    }
+
+
+@pytest.mark.parametrize(
+    ("extra", "key"),
+    [
+        ({"many": True}, "many"),
+        ({"sort": "alpha"}, "sort"),
+        ({"sort": "bogus"}, "sort"),
+        ({"search_fields": ["nazev"]}, "search_fields"),
+        ({"step": 0}, "step"),
+        ({"step": -5}, "step"),
+        ({"step": "abc"}, "step"),
+        ({"step": True}, "step"),
+        ({"unit": 5}, "unit"),
+    ],
+)
+def test_warning_range_dim(conn, caplog, extra, key):
+    records = _run_extra_vars(conn, _range_config(**extra), caplog)
+    assert len(records) == 1
+    msg = records[0].getMessage()
+    assert "mista" in msg
+    assert "'cena'" in msg
+    assert key in msg
+
+
+@pytest.mark.parametrize("extra", [{}, {"step": "any"}, {"step": 0.5, "unit": "m2"}])
+def test_no_warning_valid_range_dim(conn, caplog, extra):
+    assert _run_extra_vars(conn, _range_config(**extra), caplog) == []
+
+
+@pytest.mark.parametrize("step", [0, -5, "abc", True])
+def test_invalid_range_step_falls_back_to_any(conn, step):
+    config = _range_config(step=step)
+    assert _page_filters(conn, config)["mista"]["cena"]["step"] == "any"
+    page_cfg = config["site"]["pages"]["mista"]
+    assert _build_filter_config(page_cfg, config)["dimensions"]["cena"]["step"] == "any"
+
+
+def test_invalid_range_unit_falls_back_to_empty(conn):
+    config = _range_config(unit=5)
+    assert _page_filters(conn, config)["mista"]["cena"]["unit"] == ""
+    page_cfg = config["site"]["pages"]["mista"]
+    assert _build_filter_config(page_cfg, config)["dimensions"]["cena"]["unit"] == ""
+
+
+def test_warning_unknown_type_lists_range(conn, minimal_config, caplog):
+    dims = {"typ": {"label": "Typ", "type": "radio"}}
+    config = _config_with(minimal_config, dimensions=dims)
+    records = _run_extra_vars(conn, config, caplog)
+    assert "select, multiselect, text or range" in records[0].getMessage()
+
+
+def test_render_range_widget(conn):
+    html = _render(conn, _range_config(unit="Kč", step=100000))
+    inputs = re.findall(r"<input[^<>]*>", html)
+    assert len(inputs) == 2
+    assert 'data-filter-range="min"' in inputs[0]
+    assert 'data-filter-range="max"' in inputs[1]
+    for tag in inputs:
+        assert 'data-filter-dimension="cena"' in tag
+        assert 'step="100000"' in tag
+        assert 'min="0"' in tag
+        assert 'type="number"' in tag
+        assert 'inputmode="decimal"' in tag
+    assert "Kč" in html
+    assert "data-filter-js-only" in _tag(html, 'data-dimension="cena"')
+    assert "data-filter-js-only" in _tag(html, "data-filter-widget")
+
+
+def test_render_range_widget_defaults_and_escaping(conn):
+    html = _render(conn, _range_config(unit="<b>Kč</b>"))
+    assert 'step="any"' in html
+    assert "<b>Kč</b>" not in html
+    assert "&lt;b&gt;" in html
+
+
+def test_render_range_widget_without_unit(conn):
+    html = _render(conn, _range_config())
+    assert "filter-range-unit" not in html
+
+
+def test_render_range_with_select_url_not_js_only_on_widget(conn):
+    config = _js_only_config({"type": "select", "url": "/typ/{slug}.html"})
+    config["site"]["pages"]["mista"]["filters"]["dimensions"]["cena"] = {
+        "label": "Cena",
+        "type": "range",
+    }
+    html = _render(conn, config)
+    assert "data-filter-js-only" in _tag(html, 'data-dimension="cena"')
+    assert "data-filter-js-only" not in _tag(html, "data-filter-widget")
+
+
+# ── sort_records ──────────────────────────────────────────────────────────────
+
+_SORT_OPTIONS = [{"field": "cena", "label": "Cena"}, {"field": "plocha", "label": "Plocha"}]
+
+
+def _sort_config(sort_records, **filters_extra) -> dict:
+    return {
+        "sources": {"tables": {"mista": {"main": True}}},
+        "site": {
+            "pages": {
+                "mista": {
+                    "path": "/mista.html",
+                    "filters": {
+                        "dimensions": {"cena": {"label": "Cena", "type": "range"}},
+                        "sort_records": sort_records,
+                        **filters_extra,
+                    },
+                },
+            },
+        },
+    }
+
+
+def test_sort_records_defaults(conn):
+    config = _sort_config({"options": _SORT_OPTIONS})
+    pf = _page_filters(conn, config)["mista"]
+    assert pf["_sort_records"] == {
+        "param": "sort",
+        "default_label": "Výchozí řazení",
+        "options": _SORT_OPTIONS,
+    }
+    cfg = _build_filter_config(config["site"]["pages"]["mista"], config)
+    assert cfg["sortRecords"] == {"param": "sort", "options": _SORT_OPTIONS}
+
+
+def test_sort_records_custom(conn):
+    sr = {"param": "razeni", "default_label": "Nejnovější", "options": _SORT_OPTIONS}
+    config = _sort_config(sr)
+    pf = _page_filters(conn, config)["mista"]
+    assert pf["_sort_records"] == sr
+    cfg = _build_filter_config(config["site"]["pages"]["mista"], config)
+    assert cfg["sortRecords"] == {"param": "razeni", "options": _SORT_OPTIONS}
+
+
+def test_sort_records_absent(conn, minimal_config):
+    pf = _page_filters(conn, minimal_config)["vsechna_mista"]
+    assert "_sort_records" not in pf
+    page_cfg = minimal_config["site"]["pages"]["vsechna_mista"]
+    assert _build_filter_config(page_cfg, minimal_config)["sortRecords"] is None
+
+
+def test_sort_records_drops_incomplete_items(conn):
+    options = [{"field": "cena"}, {"label": "X"}, {"field": "plocha", "label": "Plocha"}]
+    config = _sort_config({"options": options})
+    expected = [{"field": "plocha", "label": "Plocha"}]
+    assert _page_filters(conn, config)["mista"]["_sort_records"]["options"] == expected
+    cfg = _build_filter_config(config["site"]["pages"]["mista"], config)
+    assert cfg["sortRecords"]["options"] == expected
+
+
+def test_sort_records_no_valid_items_keeps_empty_options(conn):
+    config = _sort_config({"options": [{"field": "cena"}]})
+    assert _page_filters(conn, config)["mista"]["_sort_records"]["options"] == []
+    cfg = _build_filter_config(config["site"]["pages"]["mista"], config)
+    assert cfg["sortRecords"]["options"] == []
+
+
+def test_sort_records_missing_options_keeps_empty_options(conn):
+    config = _sort_config({})
+    assert _page_filters(conn, config)["mista"]["_sort_records"]["options"] == []
+
+
+@pytest.mark.parametrize(
+    ("sort_records", "filters_extra", "expected"),
+    [
+        ({"param": "cena", "options": _SORT_OPTIONS}, {}, "'cena'"),
+        ({}, {}, "options"),
+        ({"options": []}, {}, "options"),
+        ({"options": [{"label": "Cena"}]}, {}, "field"),
+        ({"options": [{"field": "cena"}]}, {}, "label"),
+        ({"options": _SORT_OPTIONS}, {"fields": ["slug", "cena"]}, "'plocha'"),
+    ],
+)
+def test_warning_sort_records(conn, caplog, sort_records, filters_extra, expected):
+    config = _sort_config(sort_records, **filters_extra)
+    records = _run_extra_vars(conn, config, caplog)
+    assert len(records) == 1
+    msg = records[0].getMessage()
+    assert "mista" in msg
+    assert expected in msg
+    assert "sort_records" in msg
+
+
+def test_no_warning_valid_sort_records(conn, caplog):
+    config = _sort_config({"options": _SORT_OPTIONS}, fields=["slug", "cena", "plocha"])
+    assert _run_extra_vars(conn, config, caplog) == []
+
+
+def test_render_sort_select(conn):
+    config = _sort_config({"default_label": "Nejnovější", "options": _SORT_OPTIONS[:1]})
+    html = _render(conn, config)
+    select = re.search(r"<select[^<>]*data-filter-sort[^<>]*>.*?</select>", html, re.S)
+    assert select
+    options = re.findall(r'<option value="([^"]*)"[^<>]*>([^<]*)</option>', select.group(0))
+    assert options == [("", "Nejnovější"), ("cena", "Cena ↑"), ("-cena", "Cena ↓")]
+    before = html[: html.index("<select")]
+    assert "data-filter-js-only" in before[before.rindex("<div") :]
+
+
+def test_render_without_sort_records(conn):
+    html = _render(conn, _range_config())
+    assert "data-filter-sort" not in html
