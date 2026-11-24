@@ -1186,3 +1186,27 @@ def test_render_sort_select(conn):
 def test_render_without_sort_records(conn):
     html = _render(conn, _range_config())
     assert "data-filter-sort" not in html
+
+
+@pytest.mark.parametrize("sort_records", [_SORT_OPTIONS, "cena", 1])
+def test_sort_records_not_a_dict(conn, caplog, sort_records):
+    config = _sort_config(sort_records)
+    records = _run_extra_vars(conn, config, caplog)
+    assert len(records) == 1
+    msg = records[0].getMessage()
+    assert "mista" in msg
+    assert "sort_records" in msg
+    assert "options" in msg
+    assert _page_filters(conn, config)["mista"]["_sort_records"] == {
+        "param": "sort",
+        "default_label": "Výchozí řazení",
+        "options": [],
+    }
+    cfg = _build_filter_config(config["site"]["pages"]["mista"], config)
+    assert cfg["sortRecords"] == {"param": "sort", "options": []}
+
+
+def test_sort_records_unhashable_param(conn, caplog):
+    config = _sort_config({"param": ["cena"], "options": _SORT_OPTIONS})
+    assert _run_extra_vars(conn, config, caplog) == []
+    assert _page_filters(conn, config)["mista"]["_sort_records"]["options"] == _SORT_OPTIONS

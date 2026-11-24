@@ -75,11 +75,14 @@ def _range_params(dim_cfg: dict) -> tuple[str, int | float | str]:
     return unit, step
 
 
-def _sort_records_params(sort_cfg: dict) -> dict:
+def _sort_records_params(sort_cfg) -> dict:
     """Normalize a ``sort_records`` config to ``{param, default_label, options}``.
 
-    Options without ``field`` or ``label`` are dropped.
+    A non-dict config is treated as empty. Options without ``field`` or ``label``
+    are dropped.
     """
+    if not isinstance(sort_cfg, dict):
+        sort_cfg = {}
     options = sort_cfg.get("options")
     if not isinstance(options, list):
         options = []
@@ -102,7 +105,8 @@ def _warn_invalid_sort_records(page_name: str, filters_cfg: dict) -> None:
     if not isinstance(sort_cfg, dict):
         sort_cfg = {}
     param = sort_cfg.get("param", _SORT_DEFAULT_PARAM)
-    if param in filters_cfg.get("dimensions", {}):
+    # Compare by equality, not ``in``: a misconfigured param may be unhashable.
+    if any(param == dim_key for dim_key in filters_cfg.get("dimensions") or {}):
         _log.warning(
             "Filters on page '%s': sort_records param '%s' collides with a dimension key",
             page_name,
