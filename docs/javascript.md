@@ -11,7 +11,8 @@ document.dispatchEvent(new CustomEvent("krizky-filters:update", {
   detail: {
     filtered: 61,               // počet záznamů po aplikaci filtrů
     total: 537,                 // celkový počet záznamů
-    filteredRecords: [ ... ],   // aktuálně filtrované záznamy (reference, ne kopie)
+    filteredRecords: [ ... ],   // aktuálně filtrované záznamy (reference, ne kopie), v pořadí po seřazení
+    sort: "-cena",              // aktivní řazení záznamů ("cena", "-cena") nebo null (výchozí pořadí)
     activeState: {              // aktivní filtry po dimenzích
       typ: ["kriz"],
       stitky: ["baroko", "hrbitov"]
@@ -24,7 +25,7 @@ document.dispatchEvent(new CustomEvent("krizky-filters:update", {
 }));
 ```
 
-**`filteredRecords`** obsahuje reference na skutečné záznamy z filter JSONu — ne kopie, ne serializované data. Ostatní pluginy mohou pole procházet a použít libovolná pole záznamu (`slug`, `id_radku`, atd.).
+**`filteredRecords`** obsahuje reference na skutečné záznamy z filter JSONu — ne kopie, ne serializované data. Záznamy jsou v pořadí po seřazení (viz `sort`; bez řazení v pořadí filter JSONu). Ostatní pluginy mohou pole procházet a použít libovolná pole záznamu (`slug`, `id_radku`, atd.).
 
 **Když to zapadá:**
 
@@ -103,6 +104,7 @@ Kombinace:    /vsechna-mista-2.html?typ=kriz&stitky=baroko
 **Cesta** kóduje číslo stránky (path segment). **Query params** kódují filtry — jedna dimenze = jeden parameter, více hodnot = čárka.
 
 Vlastnosti:
+- Řazení záznamů (`sortRecords` v `#filter-config`) je jeden parametr pojmenovaný podle `sortRecords.param` (výchozí `sort`): `?cena=3000000-5000000&sort=-cena` (`sort=cena` vzestupně, `sort=-cena` sestupně). Hodnota mimo `sortRecords.options` se ignoruje, výchozí řazení parametr nemá. Odkazy stránkování řazení zachovají.
 - Funguje browser back/forward (`popstate` listener)
 - URL bookmarkovatelná — vstup s URL parametry rovnou aktivuje filtr
 - Rozsah (`type: range`) je jeden parametr `?cena=3000000-5000000` (`3000000-` jen od, `-5000000` jen do), viz [Range dim](#range-dim-číselný-rozsah)
@@ -119,6 +121,7 @@ Všechny hookovací atributy fungují přes **event delegation** nebo přes DOM 
 |---|---|
 | `[data-filter-value="slug"][data-filter-dimension="dim"]` | Element funguje jako filter control. Click → toggle hodnoty ve state, aplikovat filtr. |
 | `[data-filter-range="min\|max"][data-filter-dimension="dim"]` | Číselné pole mezí dimenze `type: range`, viz [Range dim](#range-dim-číselný-rozsah). |
+| `[data-filter-sort]` | `<select>` řazení záznamů. Hodnoty `""` (výchozí pořadí), `field` (vzestupně), `-field` (sestupně). Změna vrátí stránkování na stranu 1. Řazení se aplikuje na vyfiltrované záznamy před stránkováním, `null`, chybějící hodnoty a prázdné řetězce jsou vždy na konci. `[data-filter-clear]` řazení neresetuje. Funguje jen s `sortRecords` v configu. |
 | `[data-filter-clear]` | Click → vyprázdnit všechny filtry (včetně rozsahů). Element se skryje (`hidden`) když nic není aktivní. |
 | `[data-filter-clear-dim="dim"]` | Click → vymazat jen tu dimenzi. Užitečné pro chip × tlačítko nebo per-dimension clear v combobox triggeru. |
 
@@ -242,10 +245,19 @@ Plugin injektuje do stránky JSON s konfigurací filtru:
     "typ": {"label": "Typ", "type": "select"},
     "stitky": {"label": "Štítek", "type": "multiselect", "many": true},
     "cena": {"label": "Cena", "type": "range", "unit": "Kč", "step": 100000}
+  },
+  "sortRecords": {
+    "param": "sort",
+    "options": [
+      {"field": "cena", "label": "Cena"},
+      {"field": "plocha", "label": "Plocha"}
+    ]
   }
 }
 </script>
 ```
+
+`sortRecords` je `null` (nebo chybí), když stránka řazení nemá, a pak se nic nemění. Jinak `param` je název URL parametru a `options` seznam polí záznamu, podle kterých jde řadit.
 
 Dimenze `type: range` má v configu navíc `unit` (text za čísly, v chipu aktivního filtru) a `step` (atribut `step` číselných polí).
 
