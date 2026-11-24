@@ -2,15 +2,15 @@
 id: "02"
 slug: js-range
 title: Dimenze range ve filters.js a zpřístupnění čistých funkcí testům
-status: pending
+status: done
 depends_on: []
 files:
   - krizky_filters/assets/krizky-filters/filters.js
   - tests/js/load-filters.mjs
   - tests/js/range.test.mjs
   - docs/javascript.md
-attempts: 0
-pr: ""
+attempts: 2
+pr: "11"
 ---
 
 ## Cíl
